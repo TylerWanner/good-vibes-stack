@@ -198,6 +198,20 @@ If new capabilities make the repo feel cleverer but harder to explain, that is a
 
 ---
 
+## 11. Capability changes require a human in the loop
+
+The agent can request work. It can propose code. It can trigger flows that are already deployed.
+
+It cannot unilaterally introduce new capabilities into the running system.
+
+Deploying new flow code, rebuilding images, changing infrastructure configuration — these require explicit human action. The build step is the gate. The control plane enforces the boundary. The agent proposes; the human ships.
+
+This is not a limitation on what the agent can do over time. It is a constraint on how fast it can do it without review.
+
+The principle: **autonomous operation within defined capabilities; human approval to expand them.**
+
+---
+
 ## The test
 
 A good change makes at least one of these things better:
