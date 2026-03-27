@@ -1,0 +1,250 @@
+services:
+  # ─── Core Infrastructure ────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ${STATE_DIR:-./state}/postgres:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "127.0.0.1:4200:4200"
+    environment:
+      - PREFECT_UI_ENABLED=true
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/prefect
+      - PREFECT_SERVER_DATABASE_CONNECTION_POOL_SIZE=10
+      - PREFECT_SERVER_DATABASE_CONNECTION_POOL_MAX_OVERFLOW=20
+    volumes:
+      - prefect-data:/root/.prefect
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ─── Fetchers ───────────────────────────────────────────────────────────────
+  scrapling-fetcher:
+    build:
+      context: ./second_brain/acquisition/scrapling_fetcher
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=5).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ─── API Layer ──────────────────────────────────────────────────────────────
+  nervous-system-api:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -lc "pip install --quiet -e . && uvicorn nervous_system.http.server:app --host 0.0.0.0 --port 8001"
+    ports:
+      - "127.0.0.1:8001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/app
+      - pip-cache:/root/.cache/pip
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - PIP_CACHE_DIR=/root/.cache/pip
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
+      - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
+      - OLLAMA_BASE_URL=${SECOND_BRAIN_OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
+      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - API_SECRET_KEY=${API_SECRET_KEY:-}
+      # OpenTelemetry
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SERVICE_NAME=nervous-system-api
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prefect-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5).read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── Prefect Worker ─────────────────────────────────────────────────────────
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile.worker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PREFECT_LOCAL_STORAGE_PATH=/prefect-storage
+      - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SECOND_BRAIN_ANTHROPIC_API_KEY=${SECOND_BRAIN_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY}}
+      - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
+      - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
+      - OLLAMA_BASE_URL=${SECOND_BRAIN_OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - BACKUP_S3_ENDPOINT=${BACKUP_S3_ENDPOINT:-}
+      - BACKUP_S3_ACCESS_KEY_ID=${BACKUP_S3_ACCESS_KEY_ID:-}
+      - BACKUP_S3_SECRET_ACCESS_KEY=${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-backups}
+      - BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX:-postgres/}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
+      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      # OpenTelemetry
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SERVICE_NAME=prefect-worker
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
+    volumes:
+      # Mount code for local dev; remove for production to use baked image
+      - ./:/app
+      - prefect-storage:/prefect-storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prefect-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── OpenClaw Agent ─────────────────────────────────────────────────────────
+  # To enable: set TELEGRAM_BOT_TOKEN and OPENCLAW_GATEWAY_TOKEN in .env
+  openclaw-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile.openclaw
+    user: root  # Avoid permission issues with bind-mounted state directory
+    ports:
+      - "127.0.0.1:18789:18789"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${AGENT_STATE_DIR:-./state/agent}:/root/.openclaw
+      - ./agents/example/config/openclaw.json:/root/.openclaw/openclaw.json:ro
+      - ./agents/example:/root/.openclaw/workspace:ro
+      - ./agents/extensions:/root/.openclaw/extensions:ro
+      - ./:/workspace:rw
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - OPENCLAW_MODEL=${OPENCLAW_MODEL:-anthropic/claude-sonnet-4-6}
+      - OLLAMA_BASE_URL=${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_HOST=${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - NERVOUS_SYSTEM_API_URL=http://nervous-system-api:8001
+      - SAFE_DOCKER_URL=http://safe-docker:8080
+      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SERVICE_NAME=openclaw-agent
+    depends_on:
+      nervous-system-api:
+        condition: service_healthy
+    profiles:
+      - agent  # Only starts with: docker compose --profile agent up
+    restart: unless-stopped
+
+  # ─── Control Plane ──────────────────────────────────────────────────────────
+  safe-docker:
+    image: ghcr.io/reptilianhq/safe-docker:latest
+    user: root  # Required to access Docker socket on macOS
+    ports:
+      - "127.0.0.1:8004:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./control/policy.yaml:/app/policy.yaml:ro
+    environment:
+      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
+    command: ["/app/safe-docker", "-config", "/app/policy.yaml"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ─── Observability ──────────────────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.4.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports:
+      - "127.0.0.1:4317:4317"   # OTLP gRPC
+      - "127.0.0.1:3200:3200"   # Tempo HTTP
+    volumes:
+      - ./infra/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - tempo
+    restart: unless-stopped
+
+volumes:
+  prefect-data:
+  prefect-storage:
+  tempo-data:
+  grafana-data:
+  pip-cache:

@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.blocks
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# Runtime data
+openclaw-data/
+provision-data/
+agents/*/openclaw-data/
+agents/*/codex-data/
+agents/*/config/.env
+
+# State directories
+state/
+
+# Temp files
+.tmp_*

@@ -1,0 +1,3 @@
+hcloud_token   = "your-hetzner-api-token"
+ssh_public_key = "ssh-ed25519 AAAA... your-key-comment"
+your_ip_cidr   = "YOUR_IP/32"

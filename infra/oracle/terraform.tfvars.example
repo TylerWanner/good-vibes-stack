@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and fill in your values
+# Get these from Oracle Cloud Console → Profile → Tenancy + User settings
+tenancy_ocid        = "ocid1.tenancy.oc1..YOUR_TENANCY_OCID"
+user_ocid           = "ocid1.user.oc1..YOUR_USER_OCID"
+fingerprint         = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path    = "~/.oci/oci_api_key.pem"
+region              = "us-ashburn-1"
+compartment_ocid    = "ocid1.tenancy.oc1..YOUR_TENANCY_OCID"  # same as tenancy for root compartment
+availability_domain = "YOUR_AD_NAME:US-ASHBURN-AD-1"          # check Console → Identity → Availability Domains
+ssh_public_key      = "ssh-ed25519 YOUR_PUBLIC_KEY"
+your_ip_cidr        = "0.0.0.0/0"                             # restrict to your IP for security

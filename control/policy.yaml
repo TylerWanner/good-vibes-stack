@@ -1,0 +1,56 @@
+server:
+  listen_addr: ":8080"
+
+docker:
+  socket_path: "/var/run/docker.sock"
+  timeout_seconds: 15
+  log_tail_default: 100
+  log_tail_max: 500
+
+auth:
+  keys:
+    "${SAFE_DOCKER_API_KEY}":
+      label: agents
+
+logging:
+  level: info
+  format: json
+
+# ---------------------------------------------------------------------------
+# Project policies
+#
+# Project key must match Docker Compose project name.
+# Update "good-vibes-stack" if your docker-compose project has a different name.
+# ---------------------------------------------------------------------------
+
+projects:
+  good-vibes-stack:
+    services:
+      # Core infrastructure - read only
+      postgres:
+        actions: [status, logs]  # No restart — risk of data corruption
+
+      prefect-server:
+        actions: [status, logs, restart, up, down]
+
+      prefect-worker:
+        actions: [status, logs, restart, up, down]
+
+      # Fetchers
+      scrapling-fetcher:
+        actions: [status, logs, restart, up, down]
+
+      # API layer
+      nervous-system-api:
+        actions: [status, logs, restart, up, down]
+
+      # Observability
+      tempo:
+        actions: [status, logs, restart, up, down]
+
+      grafana:
+        actions: [status, logs, restart, up, down]
+
+      # safe-docker itself - logs only, no self-restart
+      safe-docker:
+        actions: [status, logs]

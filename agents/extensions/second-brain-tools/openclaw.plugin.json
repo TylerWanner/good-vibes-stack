@@ -1,0 +1,29 @@
+{
+  "id": "second-brain-tools",
+  "name": "Second Brain Tools",
+  "description": "Expose second-brain HTTP API as OpenClaw agent tools.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string"
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000
+      }
+    }
+  },
+  "uiHints": {
+    "baseUrl": {
+      "label": "Second Brain API URL",
+      "placeholder": "http://host.docker.internal:8001"
+    },
+    "timeoutMs": {
+      "label": "HTTP timeout (ms)"
+    }
+  }
+}

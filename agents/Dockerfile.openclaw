@@ -1,0 +1,17 @@
+FROM ghcr.io/openclaw/openclaw:main
+
+# Install diagnostics-otel extension dependencies
+# Required for OTEL traces/metrics/logs export from OpenClaw gateways
+WORKDIR /app/extensions/diagnostics-otel
+RUN npm install --legacy-peer-deps 2>/dev/null || true
+WORKDIR /app
+
+# Fix permissions for openclaw directories
+USER root
+RUN mkdir -p /home/node/.openclaw/agents/main/sessions \
+    /home/node/.openclaw/canvas \
+    /home/node/.openclaw/identity \
+    /home/node/.openclaw/credentials \
+    && chown -R node:node /home/node/.openclaw \
+    && chmod 700 /home/node/.openclaw
+USER node

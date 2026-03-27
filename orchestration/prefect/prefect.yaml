@@ -1,0 +1,301 @@
+# prefect.yaml - Deployment definitions for second-brain flows
+# Run: prefect deploy --all --prefect-file /app/orchestration/prefect/prefect.yaml
+# from /app (repo root)
+
+name: second-brain
+prefect-version: "3.x"
+
+build: null
+push: null
+
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: /app
+
+deployments:
+  - name: ingest-url
+    version: null
+    tags: ["second-brain"]
+    description: "Ingest a URL into the second brain (fetch, analyze, store)"
+    entrypoint: orchestration/flows/ingest_url.py:ingest_url
+    parameters: {}
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []
+
+  - name: backfill-embeddings
+    version: null
+    tags: ["second-brain", "maintenance"]
+    description: "Backfill pgvector embeddings for existing processed articles (run once manually)"
+    entrypoint: orchestration/flows/backfill_embeddings.py:backfill_embeddings
+    parameters:
+      batch_size: 50
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: reanalyze-articles
+    version: null
+    tags: ["second-brain", "maintenance"]
+    description: "Re-analyze articles with current prompt, overwriting stale summaries. Run before backfill-embeddings."
+    entrypoint: orchestration/flows/reanalyze_articles.py:reanalyze_articles
+    parameters:
+      cutoff_date: "2026-03-05T22:40:00"
+      batch_size: 5
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: sync-readwise
+    version: null
+    tags: ["second-brain", "readwise"]
+    description: "Pull new bookmarks from Readwise Reader and ingest them into the second brain (incremental)"
+    entrypoint: orchestration/flows/sync_readwise.py:sync_readwise
+    parameters:
+      force_full: false
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: write-article
+    version: null
+    tags: ["second-brain", "content"]
+    description: "Iterative article writing: Qwen generates drafts, Claude scores/edits, saves final draft"
+    entrypoint: orchestration/flows/write_article.py:write_article
+    parameters:
+      topic: ""
+      angle: ""
+      format: "thread"
+      drafts: 3
+      edit_rounds: 2
+      output_path: null
+      use_second_brain: true
+      notify: true
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: rescore-articles
+    version: null
+    tags: ["second-brain", "maintenance"]
+    description: "Re-run LLM scoring on processed articles missing scores or tags"
+    entrypoint: orchestration/flows/rescore_articles.py:rescore_articles
+    parameters:
+      limit: 100
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+
+  - name: cleanup-stale-runs
+    version: null
+    tags: ["ops", "maintenance"]
+    description: "Cancel Prefect flow runs stuck in RUNNING state older than threshold. Runs hourly."
+    entrypoint: orchestration/flows/cleanup_stale_runs.py:cleanup_stale_runs
+    parameters:
+      threshold_hours: 2
+    concurrency_limit: 1
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 * * * *"
+        timezone: "UTC"
+        active: true
+
+  - name: retry-failed
+    version: null
+    tags: ["second-brain", "maintenance"]
+    description: "Retry all articles with status=failed in the DB"
+    entrypoint: orchestration/flows/retry_failed.py:retry_failed
+    parameters:
+      limit: 50
+      delay_seconds: 1.5
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: research-topic
+    version: null
+    tags: ["second-brain", "research"]
+    description: "Research a topic using web search and second brain, return synthesized findings"
+    entrypoint: orchestration/flows/research.py:research_topic
+    parameters:
+      query: ""
+      num_sources: 5
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: weekly-digest
+    version: null
+    tags: ["second-brain"]
+    description: "Generate a weekly digest from recent ingested articles"
+    entrypoint: orchestration/flows/weekly_digest.py:weekly_digest
+    parameters:
+      days: 7
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 8 * * 1"  # Every Monday at 8am UTC
+        timezone: "UTC"
+        active: true
+
+  - name: post-tweet
+    version: null
+    tags: ["second-brain", "twitter"]
+    description: "Draft and post a tweet from recent second brain content"
+    entrypoint: orchestration/flows/post_tweet.py:post_tweet
+    parameters:
+      days: 7
+      article_limit: 20
+      draft_count: 5
+      dry_run: false
+      text: null
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: run-migrations
+    version: null
+    tags: ["second-brain", "maintenance", "migrations"]
+    description: "Apply pending Alembic migrations to the second brain database"
+    entrypoint: orchestration/flows/run_migrations.py:run_migrations
+    parameters:
+      revision: head
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: run-tests
+    version: null
+    tags: ["ops", "testing"]
+    description: "Run pytest inside the worker container and report results"
+    entrypoint: orchestration/flows/run_tests.py:run_tests
+    parameters:
+      path: "tests/"
+      extra_args: []
+      notify: true
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []
+
+  - name: backup-postgres
+    version: null
+    tags: ["second-brain", "ops", "backup"]
+    description: "Daily pg_dump of second_brain and prefect databases to S3/R2"
+    entrypoint: orchestration/flows/backup_postgres.py:backup_postgres
+    parameters:
+      notify: true
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 3 * * *"  # Daily at 03:00 UTC
+        timezone: "UTC"
+        active: true
+
+  - name: restore-postgres-from-backup
+    version: null
+    tags: ["second-brain", "ops", "backup"]
+    description: "Restore a Postgres database from an S3/R2 backup (dry_run=True by default)"
+    entrypoint: orchestration/flows/backup_postgres.py:restore_postgres_from_backup
+    parameters:
+      database: "second_brain"
+      backup_key: "latest"
+      dry_run: true
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # Manual trigger only
+
+  - name: ingest-github-repo
+    version: null
+    tags: ["second-brain", "github", "ingest"]
+    description: "Ingest a GitHub repo — fetch metadata, README, releases, analyze with LLM, store"
+    entrypoint: orchestration/flows/ingest_github_repo.py:ingest_github_repo
+    parameters: {}
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # On-demand only via POST /repos?url=<github_url>
+
+  - name: check-repo-updates
+    version: null
+    tags: ["second-brain", "github", "updates"]
+    description: "Check a single GitHub repo for new releases or meaningful README changes (on-demand)"
+    entrypoint: orchestration/flows/check_repo_updates.py:check_repo_updates
+    parameters: {}
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []  # On-demand only — use check-all-watched-repos for scheduled runs
+
+  - name: check-all-watched-repos
+    version: null
+    tags: ["second-brain", "github", "updates"]
+    description: "Daily: check all watched repos for new releases or meaningful README changes"
+    entrypoint: orchestration/flows/check_repo_updates.py:check_all_watched_repos
+    parameters: {}
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules:
+      - cron: "0 6 * * *"  # Daily at 06:00 UTC
+        timezone: "UTC"
+        active: true
+
+  - name: initialize
+    version: null
+    tags: ["second-brain", "ops", "bootstrap"]
+    description: "Initialize the second brain stack — bootstrap blocks, concurrency limits, migrations, validate"
+    entrypoint: orchestration/flows/initialize.py:initialize
+    parameters: {}
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []
+
+  - name: deploy-flows
+    version: null
+    tags: ["second-brain", "ops"]
+    description: "Deploy all Prefect flows — runs prefect deploy --all"
+    entrypoint: orchestration/flows/deploy_flows.py:deploy_flows
+    parameters: {}
+    work_pool:
+      name: default-pool
+      work_queue_name: default
+      job_variables: {}
+    schedules: []
+
