@@ -150,7 +150,7 @@ if _otel_endpoint:
         _resource = Resource.create({
             SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "nervous-system-api"),
             "deployment.environment": "local",
-            "service.namespace": "provision",
+            "service.namespace": "good-vibes",
         })
         _provider = TracerProvider(resource=_resource)
         _exporter = OTLPSpanExporter(endpoint=_otel_endpoint, insecure=True)
@@ -1488,7 +1488,7 @@ async def ops_build_callback(request: BuildCallbackRequest) -> dict:
         import httpx as _httpx
         async with _httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{safe_docker_url}/v1/projects/provision/services/{service}/build",
+                f"{safe_docker_url}/v1/projects/default/services/{service}/build",
                 headers={"X-API-Key": safe_docker_key},
                 timeout=300,  # builds can take a while
             )

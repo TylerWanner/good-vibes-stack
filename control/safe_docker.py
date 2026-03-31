@@ -21,7 +21,7 @@ class SafeDockerClient:
         self,
         base_url: str,
         api_key: str,
-        project: str = "provision",
+        project: str = "default",
         timeout: int = 30,
     ) -> None:
         self.base_url = base_url.rstrip("/")

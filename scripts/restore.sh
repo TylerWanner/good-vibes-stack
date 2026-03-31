@@ -1,6 +1,6 @@
 #!/bin/bash
 # restore.sh — rebuild the second brain stack from scratch
-# Run from the provision directory: ./scripts/restore.sh
+# Run from the repo root: ./scripts/restore.sh
 
 set -e
 
@@ -16,7 +16,7 @@ echo "==========================="
 if [ -f .env ]; then
   export $(grep -v '^#' .env | xargs)
 else
-  echo "❌ .env not found — run from the provision directory"
+  echo "❌ .env not found — run from the repo root"
   exit 1
 fi
 

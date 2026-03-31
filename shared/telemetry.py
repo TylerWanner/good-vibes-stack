@@ -48,7 +48,7 @@ def setup_tracing(service_name: str | None = None) -> None:
         resource = Resource.create({
             SERVICE_NAME: svc,
             "deployment.environment": os.getenv("DEPLOYMENT_ENV", "local"),
-            "service.namespace": "provision",
+            "service.namespace": "good-vibes",
         })
         provider = TracerProvider(resource=resource)
         exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
@@ -75,7 +75,7 @@ def setup_tracing(service_name: str | None = None) -> None:
 
         _initialized = True
         global _tracer
-        _tracer = trace.get_tracer("provision")
+        _tracer = trace.get_tracer("good-vibes")
         logger.info("OTEL tracing enabled → %s (service=%s)", endpoint, svc)
     except ImportError:
         logger.debug("opentelemetry packages not installed — tracing disabled")
