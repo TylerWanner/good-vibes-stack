@@ -72,17 +72,13 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - PREFECT_API_URL=http://prefect-server:4200/api
       - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
       - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
       - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
-      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
-      - BRAVE_API_KEY=${BRAVE_API_KEY}
-      - API_SECRET_KEY=${API_SECRET_KEY:-}
+      - API_SECRET_KEY=${API_SECRET_KEY}
       - DO_NOT_TRACK=1
       # OpenTelemetry
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
@@ -113,17 +109,11 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - PREFECT_API_URL=http://prefect-server:4200/api
       - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SECOND_BRAIN_ANTHROPIC_API_KEY=${SECOND_BRAIN_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY}}
       - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
       - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
-      - BACKUP_S3_ENDPOINT=${BACKUP_S3_ENDPOINT:-}
-      - BACKUP_S3_ACCESS_KEY_ID=${BACKUP_S3_ACCESS_KEY_ID:-}
-      - BACKUP_S3_SECRET_ACCESS_KEY=${BACKUP_S3_SECRET_ACCESS_KEY:-}
       - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-backups}
       - BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX:-postgres/}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
@@ -132,9 +122,6 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
-      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
-      - BRAVE_API_KEY=${BRAVE_API_KEY}
       - PIP_CACHE_DIR=/root/.cache/pip
       - DO_NOT_TRACK=1
       - PREFECT_FLOW_RUN_EXECUTE_SIGTERM_BEHAVIOR=reschedule
@@ -174,7 +161,6 @@ services:
       - ${AGENT_OPENCLAW_STATE_DIR:-./agents/example/openclaw-data}:/home/node/.openclaw
       - ./agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
       - ./agents/example:/home/node/.openclaw/workspace:ro
-      - ./agents/extensions:/home/node/.openclaw/extensions:ro
       - ./:/workspace:rw
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -185,7 +171,6 @@ services:
       - NERVOUS_SYSTEM_API_URL=http://nervous-system-api:8001
       - SAFE_DOCKER_URL=http://safe-docker:8080
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
-      - BRAVE_API_KEY=${BRAVE_API_KEY}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - OTEL_SERVICE_NAME=openclaw-agent

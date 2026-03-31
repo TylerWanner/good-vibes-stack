@@ -1,5 +1,9 @@
 FROM ghcr.io/openclaw/openclaw:main
 
+# Bake local extensions into the image so plugin discovery does not depend on
+# mutable runtime mounts.
+COPY agents/extensions/second-brain-tools /app/extensions/second-brain-tools
+
 # Install diagnostics-otel extension dependencies
 # Required for OTEL traces/metrics/logs export from OpenClaw gateways
 WORKDIR /app/extensions/diagnostics-otel

@@ -57,6 +57,9 @@
   },
   "plugins": {
     "allow": ["second-brain-tools", "telegram", "diagnostics-otel"],
+    "load": {
+      "paths": ["/app/extensions/second-brain-tools"]
+    },
     "entries": {
       "second-brain-tools": {
         "enabled": true
