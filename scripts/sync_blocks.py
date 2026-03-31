@@ -106,18 +106,14 @@ def sync_blocks(env_vars: dict[str, str]) -> int:
         except Exception as e:
             print(f"  ✗ anthropic-credentials: {e}", file=sys.stderr)
 
-    # Telegram (JSON blob)
+    # Telegram bot token (plain string — used by load_telegram_bot_token(bot="default"))
     if env_vars.get("TELEGRAM_BOT_TOKEN"):
         try:
-            creds = {
-                "bot_token": env_vars["TELEGRAM_BOT_TOKEN"],
-                "chat_id": env_vars.get("TELEGRAM_CHAT_ID", ""),
-            }
-            Secret(value=json.dumps(creds)).save("telegram-credentials", overwrite=True)
-            print("  ✓ telegram-credentials")
+            Secret(value=env_vars["TELEGRAM_BOT_TOKEN"]).save("telegram-bot-token-default", overwrite=True)
+            print("  ✓ telegram-bot-token-default")
             created += 1
         except Exception as e:
-            print(f"  ✗ telegram-credentials: {e}", file=sys.stderr)
+            print(f"  ✗ telegram-bot-token-default: {e}", file=sys.stderr)
 
     # safe-docker (JSON blob)
     if env_vars.get("SAFE_DOCKER_API_KEY"):
