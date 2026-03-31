@@ -89,6 +89,8 @@ Prefect's global concurrency limits work across any Python code — flows, worke
 
 For the full architecture doctrine, see [`docs/architecture/INVARIANTS.md`](docs/architecture/INVARIANTS.md).
 
+To connect Claude Desktop or any MCP client to your second brain, see [`docs/MCP.md`](docs/MCP.md).
+
 ---
 
 ## Getting Started

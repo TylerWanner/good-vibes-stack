@@ -78,7 +78,7 @@ def second_brain_weekly_digest(
 
     Use this when users ask for a digest/summary over recent saved content.
     """
-    return _post("/digest/trigger", {"days": days})
+    return _post("/digest", {"days": days})
 
 
 @mcp.tool
