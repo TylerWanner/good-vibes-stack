@@ -206,7 +206,7 @@ def check_all_watched_repos() -> list[dict]:
     sends a single Telegram summary if any changes were found.
     """
     from data.postgres.client import PostgresClient
-    from nervous_system.notifications.telegram import send_telegram_message
+    from integrations.telegram import send_telegram_message
     from shared.config import load_settings
 
     logger = get_run_logger()
@@ -237,7 +237,7 @@ def check_all_watched_repos() -> list[dict]:
             results.append({"url": url, "error": str(exc)})
 
     if changed_summaries:
-        from nervous_system.notifications.telegram import notify_telegram
+        from integrations.telegram import notify_telegram
         message = "🔄 *Watched repo updates*\n\n" + "\n".join(changed_summaries)
         notify_telegram(message)
     else:

@@ -47,7 +47,7 @@ def persist_digest(days: int, digest: str, article_count: int) -> None:
 
 @task
 def notify_telegram_if_configured(digest: str) -> bool:
-    from nervous_system.notifications.telegram import notify_telegram
+    from integrations.telegram import notify_telegram
     return notify_telegram(digest)
 
 

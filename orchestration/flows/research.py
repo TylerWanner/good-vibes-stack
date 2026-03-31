@@ -16,7 +16,7 @@ from prefect import flow, get_run_logger, task
 
 from second_brain.llm import LLMClient
 from second_brain.acquisition.scrapling import ScraplingClient
-from nervous_system.notifications.telegram import send_telegram_message
+from integrations.telegram import send_telegram_message
 from shared.config import load_settings
 
 
@@ -106,7 +106,7 @@ def research_topic(query: str, num_sources: int = 5) -> dict[str, Any]:
     search_results = search_brave(query=query, num_results=num_sources, api_key=brave_key)
     if not search_results:
         msg = f"⚠️ Research: no results found for '{query}'"
-        from nervous_system.notifications.telegram import notify_telegram
+        from integrations.telegram import notify_telegram
         notify_telegram(msg)
         return {"query": query, "status": "no_results"}
 
@@ -129,7 +129,7 @@ def research_topic(query: str, num_sources: int = 5) -> dict[str, Any]:
     full_report = f"🔍 Research: {query}\n\n{report}\n\n**Sources:**\n{source_lines}\n\n⏱ {elapsed}s"
 
     # 5. Send via Telegram (chunk if needed — 4096 char limit)
-    from nervous_system.notifications.telegram import notify_telegram
+    from integrations.telegram import notify_telegram
     chunk_size = 4000
     chunks = [full_report[i:i + chunk_size] for i in range(0, len(full_report), chunk_size)]
     for chunk in chunks:

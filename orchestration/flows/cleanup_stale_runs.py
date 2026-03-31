@@ -128,7 +128,7 @@ def notify(cancelled: int, failed: int, threshold_hours: int, limits_reset: int)
 
     # Send via Telegram
     try:
-        from nervous_system.notifications.telegram import notify_telegram
+        from integrations.telegram import notify_telegram
         if notify_telegram(msg):
             logger.info(f"Notified: {msg}")
         else:

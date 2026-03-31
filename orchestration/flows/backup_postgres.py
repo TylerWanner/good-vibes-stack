@@ -202,7 +202,7 @@ def prune_old_backups(db_name: str, retention_days: int) -> int:
 @task(name="send-backup-notification")
 def send_backup_notification(results: list[dict[str, Any]], success: bool) -> None:
     """Send Telegram notification with backup summary."""
-    from nervous_system.notifications.telegram import notify_telegram
+    from integrations.telegram import notify_telegram
 
     if success:
         lines = ["✅ *Postgres backup complete*\n"]
@@ -302,7 +302,7 @@ def restore_postgres_from_backup(
                  Must explicitly pass dry_run=False to actually restore.
     """
     from shared.config import load_settings
-    from nervous_system.notifications.telegram import send_telegram_message
+    from integrations.telegram import send_telegram_message
 
     client = _get_s3_client()
     if not client:
@@ -363,7 +363,7 @@ def restore_postgres_from_backup(
 
         logger.info("Restore complete for %s", database)
 
-        from nervous_system.notifications.telegram import notify_telegram
+        from integrations.telegram import notify_telegram
         notify_telegram(f"✅ *Postgres restore complete*\n• `{database}` restored from `{os.path.basename(backup_key)}`")
 
     return {"dry_run": False, "database": database, "backup_key": backup_key}

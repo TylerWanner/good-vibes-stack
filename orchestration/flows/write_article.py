@@ -34,7 +34,7 @@ import requests as _requests
 from prefect import flow, get_run_logger, task
 
 from data.postgres.client import PostgresClient
-from nervous_system.notifications.telegram import notify_telegram
+from integrations.telegram import notify_telegram
 from shared.config import load_settings
 
 
