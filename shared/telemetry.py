@@ -56,7 +56,22 @@ def setup_tracing(service_name: str | None = None) -> None:
         # export immediately rather than waiting for batch flush (which may never
         # fire if the process exits before the interval).
         provider.add_span_processor(SimpleSpanProcessor(exporter))
-        trace.set_tracer_provider(provider)
+
+        # Only set if no real provider exists yet — Prefect may have already set one
+        # via its own OTEL auto-config. Prefer ours (has correct resource attributes)
+        # but don't clobber if already initialized with the same config.
+        existing = trace.get_tracer_provider()
+        existing_type = type(existing).__name__
+        if existing_type == "ProxyTracerProvider":
+            # Default no-op proxy — safe to replace
+            trace.set_tracer_provider(provider)
+        elif existing_type == "TracerProvider":
+            # Already configured (likely by Prefect) — add our exporter to it instead
+            existing.add_span_processor(SimpleSpanProcessor(exporter))
+            provider = existing
+            logger.debug("OTEL TracerProvider already set — added exporter to existing provider")
+        else:
+            trace.set_tracer_provider(provider)
 
         _initialized = True
         global _tracer

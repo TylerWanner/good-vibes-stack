@@ -28,7 +28,7 @@ class OllamaClient:
         format: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
-        timeout: int = 600,
+        timeout: int = 480,
     ) -> str:
         """Generate a chat completion.
 
@@ -56,12 +56,26 @@ class OllamaClient:
         if format:
             payload["format"] = format
 
-        response = self.session.post(
-            f"{self.base_url}/api/chat",
-            json=payload,
-            timeout=timeout,
-        )
-        response.raise_for_status()
+        prompt_preview = messages[-1]["content"][:100] if messages else "(no messages)"
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/chat",
+                json=payload,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except requests.exceptions.ReadTimeout:
+            raise RuntimeError(
+                f"Ollama timeout after {timeout}s on model={model}. Prompt: {prompt_preview}..."
+            ) from None
+        except requests.exceptions.ConnectionError:
+            raise RuntimeError(
+                f"Ollama connection failed at {self.base_url}. Is Ollama running?"
+            ) from None
+        except requests.exceptions.HTTPError as e:
+            raise RuntimeError(
+                f"Ollama HTTP {e.response.status_code} on model={model}. Prompt: {prompt_preview}..."
+            ) from None
         result = response.json()
         message = result.get("message", {})
         return (message.get("content") or "").strip()

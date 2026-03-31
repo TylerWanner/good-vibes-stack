@@ -123,6 +123,19 @@ For a full step-by-step deploy on a fresh Ubuntu VPS, see [`docs/DEPLOY_HETZNER.
 
 ---
 
+## Requirements
+
+- **Docker Compose v5+** (required for safe-docker `include:` and `additional_contexts`)
+- **Docker Engine 24+**
+- **8GB+ RAM** recommended (Ollama + Prefect + Postgres)
+
+Check your version:
+```bash
+docker compose version  # should show v2.24+ or v5+
+```
+
+---
+
 ## Stack
 
 - **Agent harness:** [OpenClaw](https://github.com/openclaw/openclaw)

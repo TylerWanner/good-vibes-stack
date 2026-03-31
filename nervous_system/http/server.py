@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from data.postgres.client import PostgresClient
 from data.postgres.async_client import AsyncPostgresClient
 from data.postgres.engine import get_async_engine
-from nervous_system.notifications.telegram import send_telegram_message
+from integrations.telegram import send_telegram_message
 from shared.config import settings
 
 logger = logging.getLogger(__name__)
@@ -180,7 +180,8 @@ class APIModel(BaseModel):
 
 class NotifyTarget(APIModel):
     """Notification routing for async operations."""
-    context: str | None = Field(None, description="Notify context name (maps to agent config)")
+    bot: str | None = Field(None, description="Bot name for token lookup (e.g. 'iggy', 'draco')")
+    context: str | None = Field(None, description="DEPRECATED: use 'bot' instead")
     channel: str | None = Field(None, description="Channel override (telegram, discord, etc.)")
     account_id: str | None = Field(None, description="Account ID for multi-account setups")
     chat_id: str | None = Field(None, description="Direct chat/channel ID")
@@ -192,6 +193,8 @@ class SaveContentRequest(APIModel):
     url: str = Field(..., min_length=1, description="URL to ingest", examples=["https://example.com/article"])
     force: bool = Field(False, description="Re-ingest even if URL already exists")
     notify: NotifyTarget | None = Field(None, description="Notification routing for completion")
+    llm_provider: str | None = Field(None, description="Override LLM provider for this ingest (e.g. 'anthropic', 'ollama')")
+    llm_model: str | None = Field(None, description="Override LLM model for this ingest (e.g. 'claude-3-5-haiku-latest')")
 
 
 class ReingestRequest(APIModel):
@@ -599,6 +602,54 @@ async def get_ingest(ingest_id: str, db: DB) -> IngestResponse:
     return IngestResponse(**record)
 
 
+class IngestRetryRequest(APIModel):
+    """Request to retry a specific ingest by ID."""
+    llm_provider: str | None = Field(None, description="Override LLM provider (e.g. 'anthropic')")
+    llm_model: str | None = Field(None, description="Override LLM model (e.g. 'claude-3-5-sonnet-latest')")
+
+
+@app.post("/ingests/{ingest_id}/retry", tags=["ingests"], response_model=IngestCreatedResponse)
+async def retry_ingest(ingest_id: str, db: DB, request: IngestRetryRequest | None = None) -> IngestCreatedResponse:
+    """Retry a specific ingest by ID. Looks up the original URL and re-queues with force=True.
+
+    Optionally accepts llm_provider/llm_model to override the LLM for this retry
+    (e.g. use Anthropic when Ollama timed out).
+    """
+    from orchestration.prefect.client import trigger_deployment_async
+
+    record = await db.get_ingest(ingest_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"ingest {ingest_id} not found")
+
+    url = record["url"]
+    notify = record.get("notify") or {}
+    llm_provider = (request.llm_provider if request else None) or None
+    llm_model = (request.llm_model if request else None) or None
+
+    new_ingest_id = await db.create_ingest(url=url, notify=notify)
+
+    flow_params: dict = {"url": url, "force": True, "notify": notify, "ingest_id": new_ingest_id}
+    if llm_provider:
+        flow_params["llm_provider"] = llm_provider
+    if llm_model:
+        flow_params["llm_model"] = llm_model
+
+    try:
+        flow_run_id = await trigger_deployment_async("ingest-url", "ingest-url", parameters=flow_params)
+        await db.update_ingest_flow_run(new_ingest_id, flow_run_id=flow_run_id)
+        return IngestCreatedResponse(
+            url=url,
+            status="processing",
+            ingest_id=new_ingest_id,
+            flow_run_id=flow_run_id,
+            message=f"Retrying{' with ' + llm_provider if llm_provider else ''} — notification on completion.",
+        )
+    except Exception as exc:
+        error_msg = f"Prefect dispatch failed: {str(exc)[:400]}"
+        await db.fail_ingest(new_ingest_id, error=error_msg)
+        return IngestCreatedResponse(url=url, status="failed", ingest_id=new_ingest_id, message=error_msg)
+
+
 @app.patch("/ingests/{ingest_id}/complete", tags=["ingests"], response_model=IngestCompleteResponse)
 async def mark_ingest_complete(ingest_id: str, db: DB, destination: str = Query("articles")) -> IngestCompleteResponse:
     """Manually mark an ingest as completed (for stuck pending records)."""
@@ -656,15 +707,23 @@ async def save_content(request: SaveContentRequest, db: DB) -> IngestCreatedResp
     url = strip_tracking_params(request.url)
     force = request.force
     notify = request.notify.model_dump(exclude_none=True) if request.notify else None
+    llm_provider = request.llm_provider or None
+    llm_model = request.llm_model or None
 
     # Create the ingests record immediately — before Prefect is involved.
     # This ensures we have a durable record regardless of what happens next.
     ingest_id = await db.create_ingest(url=url, notify=notify)
 
+    flow_params: dict = {"url": url, "force": force, "notify": notify or {}, "ingest_id": ingest_id}
+    if llm_provider:
+        flow_params["llm_provider"] = llm_provider
+    if llm_model:
+        flow_params["llm_model"] = llm_model
+
     try:
         flow_run_id = await trigger_deployment_async(
             "ingest-url", "ingest-url",
-            parameters={"url": url, "force": force, "notify": notify or {}, "ingest_id": ingest_id},
+            parameters=flow_params,
         )
 
         # Attach the flow run ID to the ingest record
@@ -803,21 +862,23 @@ async def search_skills(
 @app.post("/ops/test-notification", tags=["ops"], response_model=TestNotificationResponse)
 async def test_notification() -> TestNotificationResponse:
     """Debug: test Telegram notification from within this container."""
-    from shared.secrets import load_telegram_credentials
+    import os
+    from shared.secrets import load_telegram_bot_token
     
     telegram_result = "not tested"
 
     try:
-        creds = load_telegram_credentials()
-        if creds:
+        token = load_telegram_bot_token(bot="default")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        if token and chat_id:
             send_telegram_message(
-                creds.bot_token,
-                creds.chat_id,
+                token,
+                chat_id,
                 "🔧 Notification test from nervous_system API container",
             )
             telegram_result = "sent"
         else:
-            telegram_result = "missing creds: telegram-credentials block not found"
+            telegram_result = f"missing creds: token={bool(token)} chat_id={bool(chat_id)}"
     except Exception as exc:
         telegram_result = f"error: {exc}"
 
@@ -891,6 +952,66 @@ async def ops_ollama_slot() -> dict:
     }
 
 
+async def _reset_leaked_concurrency_slots(client: "httpx.AsyncClient") -> tuple[list, list]:
+    """Delete and recreate any Prefect concurrency limits with active_slots > 0.
+
+    Returns (reset, errors) — reset is a list of {"name", "limit"} dicts for each cleared slot.
+    Safe to call even when no slots are leaked (no-op).
+    """
+    from orchestration.prefect.client import PREFECT_API_URL
+    reset: list = []
+    errors: list = []
+    try:
+        limits_resp = await client.post(f"{PREFECT_API_URL}/v2/concurrency_limits/filter", json={}, timeout=10)
+        if limits_resp.status_code == 200:
+            for limit in limits_resp.json():
+                if limit.get("active_slots", 0) > 0:
+                    lid, name, lim = limit["id"], limit["name"], limit["limit"]
+                    try:
+                        await client.delete(f"{PREFECT_API_URL}/v2/concurrency_limits/{lid}", timeout=10)
+                        await client.post(f"{PREFECT_API_URL}/v2/concurrency_limits/", json={"name": name, "limit": lim}, timeout=10)
+                        reset.append({"name": name, "limit": lim})
+                    except Exception as exc:
+                        errors.append({"name": name, "error": str(exc)[:100]})
+    except Exception:
+        pass  # Non-critical — callers decide whether to surface errors
+    return reset, errors
+
+
+@app.post("/ops/sync-blocks", tags=["ops"])
+async def ops_sync_blocks() -> dict:
+    """Run sync_blocks.py to create/update Prefect Secret blocks from env vars.
+
+    Use after renaming blocks or when blocks are missing.
+    """
+    import asyncio
+    import subprocess
+    import sys
+    result = await asyncio.to_thread(
+        subprocess.run,
+        [sys.executable, "/app/scripts/second_brain/sync_blocks.py"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail={"stderr": result.stderr[:500]})
+    return {"status": "ok", "stdout": result.stdout[:500]}
+
+
+@app.post("/ops/reset-concurrency", tags=["ops"])
+async def ops_reset_concurrency() -> dict:
+    """Reset all leaked Prefect concurrency slots (delete + recreate each limit with active_slots > 0).
+
+    Use when a flow run died without releasing its slot and new runs are stuck waiting.
+    Does not cancel any running flows — use /ops/drain for that.
+    """
+    import httpx
+    async with httpx.AsyncClient() as client:
+        reset, errors = await _reset_leaked_concurrency_slots(client)
+    if errors:
+        raise HTTPException(status_code=502, detail={"errors": errors})
+    return {"status": "ok", "reset": reset}
+
+
 @app.post("/ops/drain", tags=["ops"], response_model=DrainResponse)
 async def ops_drain(request: DrainRequest) -> DrainResponse:
     """Drain the Prefect work pool: cancel all PENDING (and optionally RUNNING) flow runs.
@@ -928,53 +1049,38 @@ async def ops_drain(request: DrainRequest) -> DrainResponse:
         search_resp.raise_for_status()
         flow_runs = search_resp.json()
 
-        if not flow_runs:
-            return DrainResponse(status="nothing_to_drain", work_pool=work_pool, cancelled=0)
-
         by_state: dict[str, list[str]] = {}
+        cancelled = 0
+        errors: list[dict] = []
+
         for run in flow_runs:
             state = run["state_type"]
             by_state.setdefault(state, []).append(run["id"])
 
-        if dry_run:
-            return DrainResponse(
-                status="dry_run",
-                work_pool=work_pool,
-                would_cancel={k: len(v) for k, v in by_state.items()},
-                total=len(flow_runs),
-            )
+        if not dry_run:
+            for run in flow_runs:
+                try:
+                    cancel_resp = await client.post(
+                        f"{PREFECT_API_URL}/flow_runs/{run['id']}/set_state",
+                        json={"state": {"type": "CANCELLED", "name": "Cancelled", "message": "Drained via /ops/drain"}},
+                    )
+                    cancel_resp.raise_for_status()
+                    cancelled += 1
+                except Exception as exc:
+                    errors.append({"id": run["id"], "error": str(exc)[:100]})
 
-        # Cancel each run
-        cancelled = 0
-        errors: list[dict] = []
-        for run in flow_runs:
-            try:
-                cancel_resp = await client.post(
-                    f"{PREFECT_API_URL}/flow_runs/{run['id']}/set_state",
-                    json={"state": {"type": "CANCELLED", "name": "Cancelled", "message": "Drained via /ops/drain"}},
-                )
-                cancel_resp.raise_for_status()
-                cancelled += 1
-            except Exception as exc:
-                errors.append({"id": run["id"], "error": str(exc)[:100]})
+        await _reset_leaked_concurrency_slots(client)
 
-        # Reset ollama concurrency slot — delete and recreate to clear leaked active_slots
-        # Uses v2 API which is what our concurrency limits live on
-        try:
-            limits_resp = await client.post(f"{PREFECT_API_URL}/v2/concurrency_limits/filter", json={})
-            if limits_resp.status_code == 200:
-                for limit in limits_resp.json():
-                    if limit.get("active_slots", 0) > 0:
-                        lid = limit["id"]
-                        name = limit["name"]
-                        lim = limit["limit"]
-                        await client.delete(f"{PREFECT_API_URL}/v2/concurrency_limits/{lid}")
-                        await client.post(f"{PREFECT_API_URL}/v2/concurrency_limits/", json={"name": name, "limit": lim})
-        except Exception:
-            pass  # Non-critical — slots will expire naturally
+    if dry_run:
+        return DrainResponse(
+            status="dry_run",
+            work_pool=work_pool,
+            would_cancel={k: len(v) for k, v in by_state.items()} if flow_runs else {},
+            total=len(flow_runs) if flow_runs else 0,
+        )
 
     return DrainResponse(
-        status="drained",
+        status="nothing_to_drain" if not flow_runs else "drained",
         work_pool=work_pool,
         cancelled=cancelled,
         by_state={k: len(v) for k, v in by_state.items()},
@@ -1222,6 +1328,184 @@ async def write_article_endpoint(request: WriteArticleRequest) -> WriteArticleRe
             topic=request.topic,
             message=f"Prefect dispatch failed: {str(exc)[:200]}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Build Approval HITL
+# ---------------------------------------------------------------------------
+# In-memory token store: {request_id: {token, expires_at, used, service, outcome}}
+# Not persisted — tokens are short-lived (2min TTL) by design.
+# The agent never receives the token; it lives server-side only.
+# ---------------------------------------------------------------------------
+
+import secrets as _secrets
+import threading as _threading
+from datetime import timezone as _tz, timedelta as _timedelta
+
+_BUILD_TOKENS: dict[str, dict] = {}
+_BUILD_TOKENS_LOCK = _threading.Lock()
+_BUILD_TOKEN_TTL_SECONDS = 120  # 2 minutes
+
+
+def _sweep_expired_tokens() -> None:
+    """Remove expired tokens from the store."""
+    now = _datetime.now(_tz.utc)
+    with _BUILD_TOKENS_LOCK:
+        expired = [rid for rid, t in _BUILD_TOKENS.items() if t["expires_at"] < now]
+        for rid in expired:
+            del _BUILD_TOKENS[rid]
+
+
+class BuildRequestResponse(APIModel):
+    status: str
+    request_id: str
+    message: str
+
+
+class BuildCallbackRequest(APIModel):
+    request_id: str
+    approved: bool
+
+
+@app.post("/ops/request-build", tags=["ops"], response_model=BuildRequestResponse)
+async def ops_request_build(
+    service: str = Query("prefect-worker", description="Service to build"),
+    reason: str = Query("", description="Optional reason from agent"),
+) -> BuildRequestResponse:
+    """Agent calls this to request a worker image rebuild.
+
+    Generates a one-time approval token (TTL: 2min), stores it server-side,
+    and sends a Telegram message with Approve/Deny buttons.
+    The agent never receives the token — it polls /ops/build-status/{request_id}.
+    """
+    import uuid as _uuid
+    _sweep_expired_tokens()
+
+    request_id = str(_uuid.uuid4())
+    expires_at = _datetime.now(_tz.utc) + _timedelta(seconds=_BUILD_TOKEN_TTL_SECONDS)
+
+    with _BUILD_TOKENS_LOCK:
+        _BUILD_TOKENS[request_id] = {
+            "expires_at": expires_at,
+            "used": False,
+            "service": service,
+            "outcome": None,  # "approved" | "denied" | None
+        }
+
+    msg = (
+        f"🔨 Build approval requested\n\n"
+        f"Service: {service}\n"
+        f"Request ID: {request_id[:8]}…\n"
+        f"Expires in: 2 minutes"
+    )
+    if reason:
+        msg += f"\nReason: {reason}"
+    msg += "\n\nApprove to trigger docker compose build for this service."
+
+    try:
+        import os
+        from shared.secrets import load_telegram_bot_token
+        token = load_telegram_bot_token(bot="default")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        if token and chat_id:
+            buttons = [[
+                {"text": "✅ Approve", "callback_data": f"build:approve:{request_id}"},
+                {"text": "❌ Deny",    "callback_data": f"build:deny:{request_id}"},
+            ]]
+            send_telegram_message(token, chat_id, msg, buttons=buttons)
+    except Exception as _e:
+        logger.warning("Failed to send build approval Telegram message: %s", _e)
+
+    return BuildRequestResponse(
+        status="pending_approval",
+        request_id=request_id,
+        message=f"Build approval requested for '{service}'. Waiting for human approval (TTL: 2min).",
+    )
+
+
+@app.post("/ops/build-callback", tags=["ops"])
+async def ops_build_callback(request: BuildCallbackRequest) -> dict:
+    """Called when human taps Approve/Deny on the Telegram message.
+
+    Validates the request, triggers safe-docker build on approval.
+    Single-use regardless of outcome.
+    """
+    _sweep_expired_tokens()
+
+    with _BUILD_TOKENS_LOCK:
+        entry = _BUILD_TOKENS.get(request.request_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Request ID not found or expired")
+        if entry["used"]:
+            raise HTTPException(status_code=409, detail="Token already used")
+        if entry["expires_at"] < _datetime.now(_tz.utc):
+            raise HTTPException(status_code=410, detail="Token expired")
+        entry["used"] = True
+        entry["outcome"] = "approved" if request.approved else "denied"
+        service = entry["service"]
+
+    from shared.secrets import load_telegram_bot_token
+    token = load_telegram_bot_token(bot="default")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+    if not request.approved:
+        logger.info("Build request %s denied by human", request.request_id[:8])
+        if token and chat_id:
+            send_telegram_message(token, chat_id, f"❌ Build denied for `{service}`. No changes deployed.")
+        return {"status": "denied", "service": service}
+
+    # Approved — trigger safe-docker build
+    safe_docker_key = os.getenv("SAFE_DOCKER_API_KEY")
+    if not safe_docker_key:
+        try:
+            from shared.secrets import load_safe_docker_api_key
+            safe_docker_key = load_safe_docker_api_key()
+        except Exception:
+            pass
+
+    if not safe_docker_key:
+        logger.error("Build approved but SAFE_DOCKER_API_KEY not available")
+        if token and chat_id:
+            send_telegram_message(token, chat_id, f"⚠️ Build approved for `{service}` but safe-docker API key not configured.")
+        raise HTTPException(status_code=500, detail="safe-docker API key not available")
+
+    safe_docker_url = getattr(settings, "safe_docker_url", None) or "http://safe-docker:8080"
+    try:
+        import httpx as _httpx
+        async with _httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{safe_docker_url}/v1/projects/provision/services/{service}/build",
+                headers={"X-API-Key": safe_docker_key},
+                timeout=300,  # builds can take a while
+            )
+            resp.raise_for_status()
+        logger.info("Build triggered for %s (request %s)", service, request.request_id[:8])
+        if token and chat_id:
+            send_telegram_message(token, chat_id, f"✅ Build triggered for `{service}`. I'll let you know when it's done.")
+        return {"status": "build_triggered", "service": service}
+    except Exception as exc:
+        logger.error("safe-docker build failed for %s: %s", service, exc)
+        if token and chat_id:
+            send_telegram_message(token, chat_id, f"⚠️ Build approved but safe-docker call failed for `{service}`: {str(exc)[:200]}")
+        raise HTTPException(status_code=502, detail=f"safe-docker build failed: {exc}")
+
+
+@app.get("/ops/build-status/{request_id}", tags=["ops"])
+async def ops_build_status(request_id: str) -> dict:
+    """Agent polls this to learn the outcome of a build approval request.
+
+    Returns status: pending | approved | denied | expired | not_found
+    """
+    _sweep_expired_tokens()
+    with _BUILD_TOKENS_LOCK:
+        entry = _BUILD_TOKENS.get(request_id)
+    if not entry:
+        return {"status": "not_found", "request_id": request_id}
+    if entry["expires_at"] < _datetime.now(_tz.utc) and not entry["used"]:
+        return {"status": "expired", "request_id": request_id}
+    if not entry["used"]:
+        return {"status": "pending", "request_id": request_id}
+    return {"status": entry["outcome"], "request_id": request_id, "service": entry["service"]}
 
 
 def main() -> None:

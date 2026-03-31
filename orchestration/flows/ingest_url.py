@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import time
-from typing import Any
+from typing import Any, Callable
 
 from prefect import flow, get_run_logger, task
 
@@ -14,8 +14,8 @@ from shared.telemetry import setup_tracing
 setup_tracing()
 
 from integrations.chatgpt_share import fetch_chatgpt_share_document, is_chatgpt_share_url
-from nervous_system.notifications.telegram import send_telegram_message
-from nervous_system.notifications.notify_context import load_notify_context
+from integrations.telegram import send_telegram_message
+
 from integrations.github import fetch_github_repo_document, is_github_repo_url
 from second_brain.llm import LLMClient
 from data.postgres.client import PostgresClient
@@ -333,7 +333,7 @@ def fetch_github(url: str) -> dict[str, Any]:
 
 
 @task
-def check_ollama_health() -> None:
+def check_ollama_health(llm_provider: str | None = None) -> None:
     """Ping Ollama with a trivial inference call before attempting analysis.
 
     Fails fast (15s timeout) if Ollama is hung or unresponsive, rather than
@@ -343,7 +343,8 @@ def check_ollama_health() -> None:
     import requests
     from shared.config import load_settings
     settings = load_settings()
-    if settings.llm_provider != "ollama":
+    effective_provider = llm_provider or settings.llm_provider
+    if effective_provider != "ollama":
         return
     logger = get_run_logger()
     try:
@@ -370,14 +371,28 @@ def check_ollama_health() -> None:
 
 
 @task(retries=2, retry_delay_seconds=3)
-def analyze_document(url: str, doc: dict[str, Any]) -> dict[str, Any]:
+def analyze_document(url: str, doc: dict[str, Any], llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     logger = get_run_logger()
-    from shared.secrets import load_anthropic_api_key
+    from shared.secrets import load_anthropic_api_key, load_anthropic_auth_token
     settings = load_settings()
+    effective_provider = llm_provider or settings.llm_provider
+    effective_model = llm_model or settings.llm_model
+    if llm_provider or llm_model:
+        logger.info("analyze_document: using override provider=%s model=%s for %s", effective_provider, effective_model, url)
+    # Resolve Anthropic credentials: API key first, OAuth token as fallback
+    anthropic_api_key = load_anthropic_api_key()
+    anthropic_auth_token = None
+    if effective_provider == "anthropic" and not anthropic_api_key:
+        anthropic_auth_token = load_anthropic_auth_token()
+        if anthropic_auth_token:
+            logger.info("analyze_document: no API key found, falling back to Claude Max OAuth token")
+        else:
+            logger.warning("analyze_document: no Anthropic API key or OAuth token available")
     llm = LLMClient(
-        provider=settings.llm_provider,
-        model=settings.llm_model,
-        anthropic_api_key=load_anthropic_api_key(),
+        provider=effective_provider,
+        model=effective_model,
+        anthropic_api_key=anthropic_api_key,
+        anthropic_auth_token=anthropic_auth_token,
         ollama_base_url=settings.ollama_base_url,
         embedding_provider=settings.embedding_provider,
         embedding_model=settings.embedding_model,
@@ -387,38 +402,82 @@ def analyze_document(url: str, doc: dict[str, Any]) -> dict[str, Any]:
     # Route long content through map-reduce (>16k chars → chunk + merge)
     LONG_CONTENT_THRESHOLD = 16000
     from shared.config import llm_concurrency
-    with llm_concurrency():
-        logger.info("analyze_document: acquired LLM slot for %s (%d chars)", url, len(content))
-        # Publish slot holder to Prefect Variables so it's queryable via API
-        # GET /api/variables/name/ollama-slot-holder shows who currently holds the slot
+    # Update slot holder variable so it's queryable via GET /ops/ollama-slot
+    try:
+        import urllib.request as _ur
+        from prefect.runtime import flow_run as _fr
+        _slot_info = json.dumps({"url": url, "flow_run_id": str(_fr.id), "flow_run_name": str(_fr.name)})
+        _raw_base = settings.prefect_api_url.rstrip("/")
+        _base = _raw_base[:-4] if _raw_base.endswith("/api") else _raw_base
+        _var_name = "ollama-slot-holder"
+        _var_id = None
         try:
-            import urllib.request as _ur
-            from prefect.runtime import flow_run as _fr
-            _slot_info = json.dumps({"url": url, "flow_run_id": str(_fr.id), "flow_run_name": str(_fr.name)})
-            _base = settings.prefect_api_url.rstrip("/")
-            # Upsert: try PATCH first, fall back to POST
-            _req = _ur.Request(
-                f"{_base}/api/variables/name/ollama-slot-holder",
-                data=json.dumps({"value": _slot_info}).encode(),
-                headers={"Content-Type": "application/json"},
-                method="PATCH",
-            )
-            try:
-                _ur.urlopen(_req, timeout=3)
-            except Exception:
-                _req2 = _ur.Request(
-                    f"{_base}/api/variables/",
-                    data=json.dumps({"name": "ollama-slot-holder", "value": _slot_info}).encode(),
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                _ur.urlopen(_req2, timeout=3)
-        except Exception as _e:
-            logger.debug("Could not update ollama-slot-holder variable: %s", _e)
-        if len(content) > LONG_CONTENT_THRESHOLD:
-            logger.info("analyze_document: long content (%d chars), using map-reduce", len(content))
-            result = llm.summarize_long_content(url=url, title=title, content=content)
+            _get_resp = _ur.urlopen(_ur.Request(f"{_base}/api/variables/name/{_var_name}"), timeout=3)
+            _var_id = json.loads(_get_resp.read()).get("id")
+        except Exception:
+            pass
+        if _var_id:
+            _req = _ur.Request(f"{_base}/api/variables/{_var_id}", data=json.dumps({"value": _slot_info}).encode(), headers={"Content-Type": "application/json"}, method="PATCH")
         else:
+            _req = _ur.Request(f"{_base}/api/variables/", data=json.dumps({"name": _var_name, "value": _slot_info}).encode(), headers={"Content-Type": "application/json"}, method="POST")
+        _ur.urlopen(_req, timeout=3)
+    except Exception as _e:
+        logger.warning("Could not update ollama-slot-holder variable: %s", _e)
+
+    if len(content) > LONG_CONTENT_THRESHOLD:
+        logger.info("analyze_document: long content (%d chars), using map-reduce with per-chunk concurrency", len(content))
+        import hashlib as _hashlib
+        from prefect.variables import Variable as _Variable
+
+        _chunk_var = "ingest-chunk-" + _hashlib.md5(url.encode()).hexdigest()[:12]
+
+        # Check for existing progress to resume from
+        _resume_from_chunk = 0
+        _resume_running_summary: str | None = None
+        try:
+            _existing = _Variable.get(_chunk_var, default=None)
+            if _existing:
+                _progress = json.loads(_existing)
+                _completed = _progress.get("completed_chunks", 0)
+                if _completed > 0:
+                    _resume_from_chunk = _completed
+                    _resume_running_summary = _progress.get("running_summary")
+                    logger.info("analyze_document: found existing progress %d chunks, resuming", _completed)
+        except Exception as _e:
+            logger.debug("failed to check existing chunk progress: %s", _e)
+
+        _on_chunk_progress: Callable[[int, int, str], None]
+        def _on_chunk_progress(completed: int, total: int, running_summary: str) -> None:
+            try:
+                payload = json.dumps({
+                    "url": url,
+                    "completed_chunks": completed,
+                    "total_chunks": total,
+                    "status": "in_progress",
+                    "running_summary": running_summary,
+                })
+                _Variable.set(_chunk_var, payload, overwrite=True)
+            except Exception as _e:
+                logger.debug("chunk progress variable update failed: %s", _e)
+
+        _on_complete: Callable[[], None]
+        def _on_complete() -> None:
+            try:
+                _Variable.unset(_chunk_var)
+            except Exception as _e:
+                logger.debug("chunk variable cleanup failed: %s", _e)
+
+        result = llm.summarize_long_content(
+            url=url, title=title, content=content,
+            on_chunk_progress=_on_chunk_progress,
+            on_complete=_on_complete,
+            concurrency_ctx=llm_concurrency,
+            resume_from_chunk=_resume_from_chunk,
+            resume_running_summary=_resume_running_summary,
+        )
+    else:
+        with llm_concurrency():
+            logger.info("analyze_document: acquired LLM slot for %s (%d chars)", url, len(content))
             result = llm.summarize_and_tag(url=url, title=title, content=content)
     logger.info("analyze_document result: summary_len=%d tags=%s scores=%s/%s/%s content_len=%d",
         len(result.get("summary") or ""),
@@ -584,33 +643,25 @@ def queue_found_links(
 
 
 def _notify_target(notify: dict[str, Any] | None) -> dict[str, Any]:
-    from shared.secrets import load_telegram_credentials
+    import os
+    from shared.secrets import load_telegram_bot_token
     
     notify = notify or {}
-    context_name = notify.get("context")
-
-    # If the notify payload already has chat_id set directly, skip the Prefect block
-    # lookup entirely — the context string is just a human-readable label, not a block name.
-    has_direct_routing = bool(notify.get("chat_id"))
-    context_data: dict[str, Any] = {}
-    if context_name and not has_direct_routing:
-        try:
-            context_data = load_notify_context(context_name)
-        except Exception as exc:
-            logger.warning("notify context load failed for %r: %s", context_name, exc)
-
-    # Fall back to default telegram credentials if not provided
-    telegram_creds = load_telegram_credentials()
-    default_chat_id = telegram_creds.chat_id if telegram_creds else None
-    default_bot_token = telegram_creds.bot_token if telegram_creds else None
+    bot = notify.get("bot", "default")
+    
+    # Load bot token from block
+    bot_token = load_telegram_bot_token(bot=bot)
+    
+    # chat_id from notify dict or env var fallback
+    chat_id = notify.get("chat_id") or os.getenv("TELEGRAM_CHAT_ID")
 
     return {
-        "context": context_name,
-        "channel": notify.get("channel") or context_data.get("channel") or "telegram",
-        "account_id": notify.get("account_id") or context_data.get("account_id") or "default",
-        "chat_id": notify.get("chat_id") or context_data.get("chat_id") or default_chat_id,
+        "bot": bot,
+        "channel": notify.get("channel") or "telegram",
+        "account_id": notify.get("account_id") or "default",
+        "chat_id": chat_id,
         "reply_to_message_id": notify.get("reply_to_message_id"),
-        "telegram_bot_token": context_data.get("telegram_bot_token") or default_bot_token,
+        "telegram_bot_token": bot_token,
     }
 
 
@@ -652,34 +703,34 @@ def ingest_github_subflow(url: str) -> dict[str, Any]:
 
 
 @flow(name="ingest-youtube-subflow")
-def ingest_youtube_subflow(url: str) -> dict[str, Any]:
+def ingest_youtube_subflow(url: str, llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     """Fetch, analyze, and store a YouTube video. Returns the LLM analysis dict."""
     doc = fetch_youtube(url=url)
-    analysis = analyze_document(url=url, doc=doc)
+    analysis = analyze_document(url=url, doc=doc, llm_provider=llm_provider, llm_model=llm_model)
     store_article(url=url, analysis=analysis)
     return analysis
 
 
 @flow(name="ingest-reddit-subflow")
-def ingest_reddit_subflow(url: str) -> dict[str, Any]:
+def ingest_reddit_subflow(url: str, llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     """Fetch, analyze, and store a Reddit post/thread. Returns the LLM analysis dict."""
     doc = fetch_reddit(url=url)
-    analysis = analyze_document(url=url, doc=doc)
+    analysis = analyze_document(url=url, doc=doc, llm_provider=llm_provider, llm_model=llm_model)
     store_article(url=url, analysis=analysis)
     return analysis
 
 
 @flow(name="ingest-chatgpt-subflow")
-def ingest_chatgpt_subflow(url: str) -> dict[str, Any]:
+def ingest_chatgpt_subflow(url: str, llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     """Fetch, analyze, and store a ChatGPT share URL. Returns the LLM analysis dict."""
     doc = fetch_chatgpt_share(url=url)
-    analysis = analyze_document(url=url, doc=doc)
+    analysis = analyze_document(url=url, doc=doc, llm_provider=llm_provider, llm_model=llm_model)
     store_article(url=url, analysis=analysis)
     return analysis
 
 
 @flow(name="ingest-tweet-subflow")
-def ingest_tweet_subflow(url: str, auto_follow: bool = True) -> dict[str, Any]:
+def ingest_tweet_subflow(url: str, auto_follow: bool = True, llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     """Fetch via fxtwitter, analyze, and store a tweet/thread.
 
     Raises if fxtwitter returns no content — the orchestrator catches this and
@@ -688,9 +739,9 @@ def ingest_tweet_subflow(url: str, auto_follow: bool = True) -> dict[str, Any]:
     Quoted tweets are queued as separate async ingests (not subflows) when auto_follow=True.
     Returns analysis dict with quote_follow_result merged in for notification visibility.
     """
-    check_ollama_health()
+    check_ollama_health(llm_provider=llm_provider)
     doc = fetch_fxtwitter(url=url)  # raises RuntimeError on failure (after retries)
-    analysis = analyze_document(url=url, doc=doc)
+    analysis = analyze_document(url=url, doc=doc, llm_provider=llm_provider, llm_model=llm_model)
     store_article(url=url, analysis=analysis)
 
     # Queue quoted tweets + body URLs as independent ingests
@@ -706,10 +757,13 @@ def ingest_tweet_subflow(url: str, auto_follow: bool = True) -> dict[str, Any]:
                 if isinstance(settings.domain_allowlist, frozenset)
                 else frozenset(d.strip() for d in settings.domain_allowlist.split(",") if d.strip())
             )
+            # Quote tweet URLs are always x.com — allow them even if x.com isn't in the
+            # domain allowlist (the allowlist is for article domains, not tweet-to-tweet links).
+            tweet_allowlist = domain_allowlist | frozenset({"x.com", "twitter.com"})
             quote_follow = queue_found_links(
                 source_url=url,
                 found_links=found_links,
-                domain_allowlist=domain_allowlist,
+                domain_allowlist=tweet_allowlist,
                 notify=None,
             )
 
@@ -717,18 +771,18 @@ def ingest_tweet_subflow(url: str, auto_follow: bool = True) -> dict[str, Any]:
 
 
 @flow(name="ingest-article-subflow")
-def ingest_article_subflow(url: str) -> dict[str, Any]:
+def ingest_article_subflow(url: str, llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     """Fetch via Scrapling (with sanitization), analyze, and store a generic article.
 
     Sanitization strips <script>/<style> blocks and prompt injection patterns
     before the content is passed to the LLM.
     """
-    check_ollama_health()
+    check_ollama_health(llm_provider=llm_provider)
     doc = fetch_with_scrapling(url=url)
     # Sanitize fetched text before LLM analysis
     if doc.get("text"):
         doc = {**doc, "text": _sanitize_text(doc["text"])}
-    analysis = analyze_document(url=url, doc=doc)
+    analysis = analyze_document(url=url, doc=doc, llm_provider=llm_provider, llm_model=llm_model)
     store_article(url=url, analysis=analysis)
     return analysis
 
@@ -738,13 +792,14 @@ def ingest_article_subflow(url: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @flow(name="ingest-url")
-def ingest_url(url: str, force: bool = False, auto_follow: bool = True, notify: dict[str, Any] | None = None, ingest_id: str | None = None) -> dict[str, Any]:
+def ingest_url(url: str, force: bool = False, auto_follow: bool = True, notify: dict[str, Any] | None = None, ingest_id: str | None = None, llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     """Ingest a URL into the second brain. Routes to the appropriate subflow by source type.
 
     auto_follow=True (default): automatically ingest relevant links found in content.
     auto_follow=False: used for auto-followed links to prevent recursion (depth=1 only).
     ingest_id: UUID of the ingests record created by the API. When provided, the flow
                updates it to completed/failed on exit. Auto-followed links do not pass ingest_id.
+    llm_provider/llm_model: Optional per-ingest LLM override. Bypasses global settings.
     Distributed tracing: API injects __OTEL_TRACEPARENT into flow run labels;
     Prefect's native telemetry picks it up and re-parents the flow span.
     """
@@ -875,23 +930,23 @@ def ingest_url(url: str, force: bool = False, auto_follow: bool = True, notify: 
         # --- Route to the appropriate typed subflow ---
         fxtwitter_fallback = False
         if is_chatgpt_share_url(url):
-            analysis = ingest_chatgpt_subflow(url=url)
+            analysis = ingest_chatgpt_subflow(url=url, llm_provider=llm_provider, llm_model=llm_model)
         elif is_youtube_url(url):
-            analysis = ingest_youtube_subflow(url=url)
+            analysis = ingest_youtube_subflow(url=url, llm_provider=llm_provider, llm_model=llm_model)
         elif is_reddit_url(url):
-            analysis = ingest_reddit_subflow(url=url)
+            analysis = ingest_reddit_subflow(url=url, llm_provider=llm_provider, llm_model=llm_model)
         elif _is_twitter_url(url):
             # Try fxtwitter first — fast, structured, visible failure in Prefect.
             # Fall back to article/Scrapling path if the tweet subflow fails.
             try:
-                analysis = ingest_tweet_subflow(url=url, auto_follow=auto_follow)
+                analysis = ingest_tweet_subflow(url=url, auto_follow=auto_follow, llm_provider=llm_provider, llm_model=llm_model)
             except Exception:
                 # fxtwitter API down or rate limited — Scrapling can still fetch the page
                 logger.warning("fxtwitter failed for %s — falling back to Scrapling", url)
                 fxtwitter_fallback = True
-                analysis = ingest_article_subflow(url=url)
+                analysis = ingest_article_subflow(url=url, llm_provider=llm_provider, llm_model=llm_model)
         else:
-            analysis = ingest_article_subflow(url=url)
+            analysis = ingest_article_subflow(url=url, llm_provider=llm_provider, llm_model=llm_model)
 
         # --- Auto-follow relevant links found in content ---
         # Skip LLM-extracted links for tweets — body URL extractor already handles those
@@ -1009,7 +1064,14 @@ def ingest_url(url: str, force: bool = False, auto_follow: bool = True, notify: 
             error_message = f"{type(exc).__name__}: {exc}"
             db.mark_article_failed(url=url, readwise_id=None, error_message=error_message)
             msg = f"❌ Ingest failed: {url}\n\n{str(exc)[:200]}"
-            _send_ingest_notification(notify, msg)
+            # Retry buttons — only available when we have a tracked ingest_id
+            buttons: list[list[dict[str, str]]] | None = None
+            if ingest_id:
+                buttons = [[
+                    {"text": "🔄 Retry", "callback_data": f"ingest:retry:{ingest_id}"},
+                    {"text": "✨ Retry with Sonnet", "callback_data": f"ingest:retry-sonnet:{ingest_id}"},
+                ]]
+            _send_ingest_notification(notify, msg, buttons=buttons)
         except Exception:
             pass  # Best-effort cleanup — don't mask original error
         raise

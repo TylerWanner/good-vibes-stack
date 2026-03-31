@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+import time
+from contextlib import contextmanager, nullcontext
+from typing import Any, Callable, ContextManager
 
 from second_brain.prompts import (
     CHUNK_EXTRACT_PROMPT,
@@ -17,6 +19,24 @@ from second_brain.prompts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# OTEL tracing — optional, gracefully degrades if not configured
+_tracer = None
+try:
+    from opentelemetry import trace
+    _tracer = trace.get_tracer("second_brain.llm")
+except ImportError:
+    pass
+
+
+@contextmanager
+def _llm_span(name: str, **attributes):
+    """Create an OTEL span for LLM operations. No-op if tracing not configured."""
+    if _tracer is None:
+        yield
+        return
+    with _tracer.start_as_current_span(name, attributes=attributes) as span:
+        yield span
 
 
 def _clamp_score(val: Any) -> int | None:
@@ -61,16 +81,18 @@ class LLMClient:
         provider: str,
         model: str,
         anthropic_api_key: str | None = None,
+        anthropic_auth_token: str | None = None,
         ollama_base_url: str = "http://127.0.0.1:11434",
         embedding_provider: str = "ollama",
         embedding_model: str = "nomic-embed-text",
     ) -> None:
         """Initialize LLM client.
-        
+
         Args:
             provider: Text generation provider ("ollama" or "anthropic")
             model: Model name for text generation
-            anthropic_api_key: Required if provider is "anthropic"
+            anthropic_api_key: API key for Anthropic (billing account)
+            anthropic_auth_token: OAuth token for Claude Max subscription (fallback)
             ollama_base_url: Ollama API base URL
             embedding_provider: Provider for embeddings ("ollama" only for now)
             embedding_model: Model name for embeddings (default: nomic-embed-text)
@@ -86,10 +108,10 @@ class LLMClient:
             from integrations.ollama import OllamaClient
             self._ollama = OllamaClient(ollama_base_url)
         elif provider == "anthropic":
-            if not anthropic_api_key:
-                raise RuntimeError("anthropic_api_key required for anthropic provider")
+            if not anthropic_api_key and not anthropic_auth_token:
+                raise RuntimeError("anthropic_api_key or anthropic_auth_token required for anthropic provider")
             from integrations.anthropic import AnthropicClient
-            self._anthropic = AnthropicClient(anthropic_api_key)
+            self._anthropic = AnthropicClient(api_key=anthropic_api_key, auth_token=anthropic_auth_token)
         else:
             raise RuntimeError(f"Unsupported LLM provider: {provider}")
 
@@ -134,37 +156,91 @@ class LLMClient:
             else:
                 break_at = len(text)
             chunks.append(text[start:break_at].strip())
-            start = max(break_at - overlap, start + 1)
+            if break_at >= len(text):
+                break  # Last chunk reached — don't create overlap chunks past the end
+            # If overlap would move us backwards or barely forward, just continue from break_at
+            next_start = break_at - overlap
+            if next_start <= start:
+                next_start = break_at
+            start = next_start
         return [c for c in chunks if c]
 
-    def summarize_long_content(self, *, url: str, title: str, content: str) -> dict[str, Any]:
+    def summarize_long_content(
+        self,
+        *,
+        url: str,
+        title: str,
+        content: str,
+        on_chunk_progress: Callable[[int, int, str], None] | None = None,
+        on_complete: Callable[[], None] | None = None,
+        concurrency_ctx: Callable[[], ContextManager] | None = None,
+        resume_from_chunk: int = 0,
+        resume_running_summary: str | None = None,
+    ) -> dict[str, Any]:
         """Map-reduce summarization for long content (>16k chars).
 
         1. Split content into overlapping chunks
         2. Extract key knowledge from each chunk (map)
         3. Merge extracts into unified summary with scores (reduce)
+
+        on_chunk_progress(completed, total, running_summary): optional callback fired after each chunk.
+        on_complete(): optional callback fired after the merge pass completes.
+        concurrency_ctx: optional callable returning a context manager wrapping each
+            _generate call. Acquired and released per-chunk so other flows can interleave.
+            Defaults to nullcontext (no concurrency gating) — llm.py has no Prefect dependency.
+        resume_from_chunk: skip to this chunk index (0-based) to resume after a failure.
+        resume_running_summary: running summary to continue from when resuming.
         """
+        _slot = concurrency_ctx if concurrency_ctx is not None else nullcontext
         COMPACT_THRESHOLD = 6000  # compact running summary when it exceeds this many chars
 
         # chunk_size=8000 chars (~2000 tokens) fits within num_ctx=10240
         # with room for running_summary and prompt overhead.
         chunks = self._chunk_text(content, chunk_size=8000, overlap=400)
         total = len(chunks)
-        running_summary = "(nothing captured yet — this is the first section)"
+        
+        # Resume support: skip already-processed chunks
+        start_chunk = resume_from_chunk if resume_from_chunk > 0 else 0
+        if start_chunk > 0 and resume_running_summary:
+            running_summary = resume_running_summary
+            logger.info("summarize_long_content: resuming from chunk %d/%d for url=%s", start_chunk + 1, total, url)
+        else:
+            running_summary = "(nothing captured yet — this is the first section)"
+            start_chunk = 0
+
+        logger.info("summarize_long_content: %d chunks for url=%s", total, url)
+        if on_chunk_progress:
+            on_chunk_progress(start_chunk, total, running_summary)
+
         for i, chunk in enumerate(chunks):
+            # Skip already-processed chunks when resuming
+            if i < start_chunk:
+                continue
             prompt = CHUNK_EXTRACT_PROMPT.format(
                 chunk_num=i + 1,
                 chunk_total=total,
                 running_summary=running_summary,
                 content=chunk,
             )
-            extract = self._generate(prompt, timeout=180)  # 3min per chunk — larger chunks need more time
+            try:
+                with _slot():
+                    extract = self._generate(prompt, timeout=480)  # 8min per chunk — 14B model on large chunks can be very slow
+            except Exception as e:
+                raise RuntimeError(f"Failed on chunk {i+1}/{total} for {url}: {e}") from e
             running_summary = f"{running_summary}\n\n[Section {i+1}]\n{extract.strip()}"
+            logger.info("summarize_long_content: completed chunk %d/%d url=%s", i + 1, total, url)
+            if on_chunk_progress:
+                on_chunk_progress(i + 1, total, running_summary)
 
             # Compact whenever running summary grows too large (not on final chunk)
             if len(running_summary) > COMPACT_THRESHOLD and i + 1 < total:
                 compact_prompt = COMPACT_SUMMARY_PROMPT.format(running_summary=running_summary)
-                running_summary = self._generate(compact_prompt, timeout=120).strip()
+                try:
+                    with _slot():
+                        running_summary = self._generate(compact_prompt, timeout=480).strip()
+                except Exception as e:
+                    raise RuntimeError(f"Failed compacting after chunk {i+1}/{total} for {url}: {e}") from e
+                logger.info("summarize_long_content: compacted running summary at chunk %d/%d (%d chars)", i + 1, total, len(running_summary))
 
         # Final pass: turn the running summary into a structured KB entry
         merged_prompt = MERGE_SUMMARY_PROMPT.format(
@@ -172,7 +248,11 @@ class LLMClient:
             title=title or "(untitled)",
             extracts=running_summary,
         )
-        raw = self._generate(merged_prompt, timeout=180)
+        try:
+            with _slot():
+                raw = self._generate(merged_prompt, timeout=480)
+        except Exception as e:
+            raise RuntimeError(f"Failed merging summary for {url}: {e}") from e
         parsed = _extract_json(raw)
 
         result = {
@@ -186,6 +266,9 @@ class LLMClient:
             "score_uniqueness": _clamp_score(parsed.get("score_uniqueness")),
         }
 
+        if on_complete:
+            on_complete()
+        logger.info("summarize_long_content: complete url=%s", url)
         return result
 
     def summarize_and_tag(self, *, url: str, title: str, content: str) -> dict[str, Any]:
@@ -360,31 +443,98 @@ class LLMClient:
             "themes": parsed.get("themes", []),
         }
 
-    def _generate(self, prompt: str, timeout: int = 300) -> str:
+    def _generate(self, prompt: str, timeout: int = 480) -> str:
         """Generate text with JSON format enforcement."""
-        if self._anthropic:
-            return self._anthropic.chat(self.model, [{"role": "user", "content": prompt}])
-        if self._ollama:
-            return self._ollama.chat(
-                self.model,
-                [{"role": "user", "content": prompt}],
-                format="json",
-                temperature=0.2,
-                timeout=timeout,
-            )
-        raise RuntimeError("No LLM client configured")
+        provider = "anthropic" if self._anthropic else "ollama" if self._ollama else "none"
+        prompt_len = len(prompt)
+        
+        with _llm_span("llm.generate", **{
+            "llm.provider": provider,
+            "llm.model": self.model,
+            "llm.prompt_len": prompt_len,
+            "llm.timeout": timeout,
+            "llm.format": "json",
+        }) as span:
+            start = time.time()
+            try:
+                if self._anthropic:
+                    result = self._anthropic.chat(self.model, [{"role": "user", "content": prompt}])
+                elif self._ollama:
+                    result = self._ollama.chat(
+                        self.model,
+                        [{"role": "user", "content": prompt}],
+                        format="json",
+                        temperature=0.2,
+                        timeout=timeout,
+                    )
+                else:
+                    raise RuntimeError("No LLM client configured")
+                
+                elapsed = time.time() - start
+                if span:
+                    span.set_attribute("llm.response_len", len(result))
+                    span.set_attribute("llm.elapsed_s", round(elapsed, 2))
+                logger.info(
+                    "llm._generate: provider=%s model=%s prompt_len=%d response_len=%d elapsed=%.1fs",
+                    provider, self.model, prompt_len, len(result), elapsed
+                )
+                return result
+            except Exception as e:
+                elapsed = time.time() - start
+                if span:
+                    span.set_attribute("llm.error", str(e)[:200])
+                    span.set_attribute("llm.elapsed_s", round(elapsed, 2))
+                    span.record_exception(e)
+                logger.error(
+                    "llm._generate FAILED: provider=%s model=%s prompt_len=%d elapsed=%.1fs error=%s",
+                    provider, self.model, prompt_len, elapsed, str(e)[:200]
+                )
+                raise
 
     def _generate_text(self, prompt: str) -> str:
         """Generate plain text (no JSON enforcement)."""
-        if self._anthropic:
-            return self._anthropic.chat(self.model, [{"role": "user", "content": prompt}])
-        if self._ollama:
-            return self._ollama.chat(
-                self.model,
-                [{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=4096,
-            )
-        raise RuntimeError("No LLM client configured")
+        provider = "anthropic" if self._anthropic else "ollama" if self._ollama else "none"
+        prompt_len = len(prompt)
+        
+        with _llm_span("llm.generate_text", **{
+            "llm.provider": provider,
+            "llm.model": self.model,
+            "llm.prompt_len": prompt_len,
+            "llm.format": "text",
+        }) as span:
+            start = time.time()
+            try:
+                if self._anthropic:
+                    result = self._anthropic.chat(self.model, [{"role": "user", "content": prompt}])
+                elif self._ollama:
+                    result = self._ollama.chat(
+                        self.model,
+                        [{"role": "user", "content": prompt}],
+                        temperature=0.3,
+                        max_tokens=4096,
+                    )
+                else:
+                    raise RuntimeError("No LLM client configured")
+                
+                elapsed = time.time() - start
+                if span:
+                    span.set_attribute("llm.response_len", len(result))
+                    span.set_attribute("llm.elapsed_s", round(elapsed, 2))
+                logger.info(
+                    "llm._generate_text: provider=%s model=%s prompt_len=%d response_len=%d elapsed=%.1fs",
+                    provider, self.model, prompt_len, len(result), elapsed
+                )
+                return result
+            except Exception as e:
+                elapsed = time.time() - start
+                if span:
+                    span.set_attribute("llm.error", str(e)[:200])
+                    span.set_attribute("llm.elapsed_s", round(elapsed, 2))
+                    span.record_exception(e)
+                logger.error(
+                    "llm._generate_text FAILED: provider=%s model=%s prompt_len=%d elapsed=%.1fs error=%s",
+                    provider, self.model, prompt_len, elapsed, str(e)[:200]
+                )
+                raise
 
 
