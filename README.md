@@ -65,6 +65,13 @@ The agent can operate the stack without raw host access. See: [github.com/Reptil
 ### Orchestration (Prefect 3)
 Self-hosted Prefect server. All deployments defined in `orchestration/prefect.yaml`. Observable, retryable, scheduled.
 
+### Worker Reliability
+The Prefect worker includes production-grade lifecycle handling:
+
+- **Graceful drain on shutdown** — SIGTERM triggers flow subprocess rescheduling before worker exits
+- **Crash recovery on startup** — orphaned RUNNING flows (from OOM, SIGKILL, power loss) are marked CRASHED and concurrency slots are reset
+- **No orphaned work** — the system self-heals after both planned and unplanned shutdowns
+
 ### Observability
 Tempo for distributed tracing, Grafana for dashboards. The system is meant to be inspected — not just used.
 

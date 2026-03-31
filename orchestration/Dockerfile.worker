@@ -30,19 +30,23 @@ WORKDIR /app
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application code
+# Copy application code — only what the worker needs
 COPY pyproject.toml ./
-COPY config/ ./config/
 COPY data/ ./data/
 COPY integrations/ ./integrations/
-COPY nervous_system/__init__.py ./nervous_system/
 COPY orchestration/ ./orchestration/
 COPY second_brain/ ./second_brain/
 COPY shared/ ./shared/
-COPY scripts/ ./scripts/
 COPY alembic.ini ./
+COPY sitecustomize.py ./
+
+# Worker scripts only (not all of scripts/)
+COPY scripts/worker.py scripts/startup_cleanup.py ./scripts/
+# sync_blocks.py needed for init.sh bootstrap (runs inside worker via docker exec)
+COPY scripts/sync_blocks.py ./scripts/
 
 # Install package metadata only (deps already installed)
 RUN pip install --no-cache-dir --no-deps .
 
-CMD ["prefect", "worker", "start", "--pool", "default-pool"]
+# Startup: cleanup orphaned runs, then start worker with graceful drain
+CMD ["bash", "-c", "python /app/scripts/startup_cleanup.py && python /app/scripts/worker.py"]

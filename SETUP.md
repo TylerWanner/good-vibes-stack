@@ -7,7 +7,7 @@ Step-by-step guide to getting the Good Vibes Stack running from scratch.
 ## Prerequisites
 
 - Linux host (tested on Ubuntu 22.04+)
-- Docker + Docker Compose v2
+- Docker + Docker Compose v2.24+ (v5+ recommended)
 - [Ollama](https://ollama.ai) running locally with models pulled:
   ```bash
   ollama pull qwen2.5:7b
@@ -131,6 +131,12 @@ If you need to rebuild a fresh install with an existing Postgres dump:
 **Worker not picking up flows:**
 ```bash
 docker compose logs prefect-worker --tail 50
+```
+
+**Orphaned flows after crash:**
+The worker runs a startup cleanup that marks orphaned RUNNING flows as CRASHED. Check the logs:
+```bash
+docker compose logs prefect-worker | grep "startup-cleanup"
 ```
 
 **Ollama timeout:**

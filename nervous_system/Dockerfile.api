@@ -23,8 +23,31 @@ WORKDIR /app
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy application code
-COPY . /app
+# Copy application code — only what the API needs
+COPY pyproject.toml ./
+
+# Core API
+COPY nervous_system/ ./nervous_system/
+
+# Database layer
+COPY data/ ./data/
+
+# Integrations used by API (telegram, ollama, github, twitter)
+COPY integrations/__init__.py ./integrations/
+COPY integrations/telegram.py ./integrations/
+COPY integrations/ollama.py ./integrations/
+COPY integrations/github.py ./integrations/
+COPY integrations/twitter.py ./integrations/
+
+# Shared utilities
+COPY shared/ ./shared/
+
+# Orchestration — only prefect client + medicine_reminder (called directly)
+COPY orchestration/__init__.py ./orchestration/
+COPY orchestration/prefect/ ./orchestration/prefect/
+RUN mkdir -p ./orchestration/flows
+COPY orchestration/flows/__init__.py ./orchestration/flows/
+COPY orchestration/flows/medicine_reminder.py ./orchestration/flows/
 
 # Install package metadata only (deps already installed)
 RUN pip install --no-cache-dir --no-deps .
