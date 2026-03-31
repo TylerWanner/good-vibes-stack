@@ -1,3 +1,21 @@
+# Stage 1: install dependencies
+FROM python:3.12.9-slim AS builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+# Stub packages so pip can resolve the editable install deps without full source
+RUN mkdir -p data integrations nervous_system orchestration second_brain shared \
+    && touch data/__init__.py integrations/__init__.py nervous_system/__init__.py \
+          orchestration/__init__.py second_brain/__init__.py shared/__init__.py
+
+RUN pip install --no-cache-dir --prefix=/install .
+
+# Stage 2: runtime
 FROM python:3.12.9-slim
 
 RUN apt-get update \
@@ -9,7 +27,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy dependency files first for layer caching
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
 COPY pyproject.toml ./
 COPY config/ ./config/
 COPY data/ ./data/
@@ -21,8 +42,7 @@ COPY shared/ ./shared/
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
 
-# Install dependencies
-RUN pip install --no-cache-dir -e .
+# Install package metadata only (deps already installed)
+RUN pip install --no-cache-dir --no-deps .
 
-# Default command
 CMD ["prefect", "worker", "start", "--pool", "default-pool"]
