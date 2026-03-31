@@ -180,7 +180,7 @@ class APIModel(BaseModel):
 
 class NotifyTarget(APIModel):
     """Notification routing for async operations."""
-    bot: str | None = Field(None, description="Bot name for token lookup (e.g. 'iggy', 'draco')")
+    bot: str | None = Field(None, description="Bot name for token lookup (e.g. 'default')")
     context: str | None = Field(None, description="DEPRECATED: use 'bot' instead")
     channel: str | None = Field(None, description="Channel override (telegram, discord, etc.)")
     account_id: str | None = Field(None, description="Account ID for multi-account setups")

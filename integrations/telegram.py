@@ -88,7 +88,7 @@ def notify_telegram(
 ) -> bool:
     """Send a Telegram notification using credentials from Prefect block.
     
-    Convenience wrapper — loads telegram-bot-token-iggy block and TELEGRAM_CHAT_ID env var.
+    Convenience wrapper — loads telegram-bot-token-default block and TELEGRAM_CHAT_ID env var.
     Returns True on success, False if credentials missing or send failed.
     
     This is a compatibility shim for the old notify_telegram() function.
@@ -97,7 +97,7 @@ def notify_telegram(
     import os
     from shared.secrets import load_telegram_bot_token
     
-    token = load_telegram_bot_token(bot="iggy")
+    token = load_telegram_bot_token(bot="default")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
     if not token or not chat_id:
