@@ -146,9 +146,6 @@ class AsyncPostgresClient:
             )
 
         async with self._session_factory() as session:
-            # Boost ivfflat probe count for semantic search (default=1 is too low for 800+ rows)
-            if q and embedding is not None:
-                await session.execute(sa.text("SET ivfflat.probes = 20"))
             result = await session.execute(stmt)
             return [_serialize_row(dict(r)) for r in result.mappings().all()]
 
