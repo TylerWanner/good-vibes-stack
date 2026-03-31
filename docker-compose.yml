@@ -49,41 +49,41 @@ services:
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:8002:8002"
+    # Playwright/Chromium needs a reasonable memory ceiling
+    mem_limit: 1g
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=5).read()"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   # ─── API Layer ──────────────────────────────────────────────────────────────
   nervous-system-api:
-    image: python:3.12-slim
-    working_dir: /app
-    command: >
-      sh -lc "pip install --quiet -e . && uvicorn nervous_system.http.server:app --host 0.0.0.0 --port 8001"
+    build:
+      context: .
+      dockerfile: nervous_system/Dockerfile.api
     ports:
       - "127.0.0.1:8001:8001"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    volumes:
-      - ./:/app
-      - pip-cache:/root/.cache/pip
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - PIP_CACHE_DIR=/root/.cache/pip
       - PREFECT_API_URL=http://prefect-server:4200/api
       - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
       - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
-      - OLLAMA_BASE_URL=${SECOND_BRAIN_OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
       - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
       - API_SECRET_KEY=${API_SECRET_KEY:-}
+      - DO_NOT_TRACK=1
       # OpenTelemetry
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
@@ -99,7 +99,7 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 20s
     restart: unless-stopped
 
   # ─── Prefect Worker ─────────────────────────────────────────────────────────
@@ -112,14 +112,15 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - PREFECT_API_URL=http://prefect-server:4200/api
-      - PREFECT_LOCAL_STORAGE_PATH=/prefect-storage
       - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - SECOND_BRAIN_ANTHROPIC_API_KEY=${SECOND_BRAIN_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY}}
       - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
       - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
-      - OLLAMA_BASE_URL=${SECOND_BRAIN_OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
       - BACKUP_S3_ENDPOINT=${BACKUP_S3_ENDPOINT:-}
       - BACKUP_S3_ACCESS_KEY_ID=${BACKUP_S3_ACCESS_KEY_ID:-}
       - BACKUP_S3_SECRET_ACCESS_KEY=${BACKUP_S3_SECRET_ACCESS_KEY:-}
@@ -134,24 +135,32 @@ services:
       - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - PIP_CACHE_DIR=/root/.cache/pip
+      - DO_NOT_TRACK=1
+      - PREFECT_FLOW_RUN_EXECUTE_SIGTERM_BEHAVIOR=reschedule
       # OpenTelemetry
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - OTEL_SERVICE_NAME=prefect-worker
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
+      - PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY=true
     volumes:
       # Mount code for local dev; remove for production to use baked image
       - ./:/app
       - prefect-storage:/prefect-storage
+      - pip-cache:/root/.cache/pip
     depends_on:
       postgres:
         condition: service_healthy
       prefect-server:
         condition: service_healthy
+      scrapling-fetcher:
+        condition: service_healthy
     restart: unless-stopped
 
   # ─── OpenClaw Agent ─────────────────────────────────────────────────────────
-  # To enable: set TELEGRAM_BOT_TOKEN and OPENCLAW_GATEWAY_TOKEN in .env
+  # To enable: set TELEGRAM_BOT_TOKEN in agents/example/config/.env and start with:
+  #   docker compose --profile agent up -d openclaw-agent
   openclaw-agent:
     build:
       context: .
@@ -161,19 +170,20 @@ services:
       - "127.0.0.1:18789:18789"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    env_file:
+      - ./agents/example/config/.env
     volumes:
-      - ${AGENT_STATE_DIR:-./state/agent}:/root/.openclaw
-      - ./agents/example/config/openclaw.json:/root/.openclaw/openclaw.json:ro
-      - ./agents/example:/root/.openclaw/workspace:ro
-      - ./agents/extensions:/root/.openclaw/extensions:ro
+      - ${AGENT_OPENCLAW_STATE_DIR:-./agents/example/openclaw-data}:/home/node/.openclaw
+      - ./agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
+      - ./agents/example:/home/node/.openclaw/workspace:ro
+      - ./agents/extensions:/home/node/.openclaw/extensions:ro
       - ./:/workspace:rw
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
       - OPENCLAW_MODEL=${OPENCLAW_MODEL:-anthropic/claude-sonnet-4-6}
-      - OLLAMA_BASE_URL=${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - OLLAMA_HOST=${OPENCLAW_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_HOST=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - NERVOUS_SYSTEM_API_URL=http://nervous-system-api:8001
       - SAFE_DOCKER_URL=http://safe-docker:8080
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
@@ -181,6 +191,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - OTEL_SERVICE_NAME=openclaw-agent
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
     depends_on:
       nervous-system-api:
         condition: service_healthy
@@ -190,7 +201,7 @@ services:
 
   # ─── Control Plane ──────────────────────────────────────────────────────────
   safe-docker:
-    image: ghcr.io/reptilianhq/safe-docker:latest
+    image: ghcr.io/reptilianhq/safe-docker:0.1.1
     user: root  # Required to access Docker socket on macOS
     ports:
       - "127.0.0.1:8004:8080"
@@ -217,11 +228,12 @@ services:
 
   # ─── Observability ──────────────────────────────────────────────────────────
   tempo:
-    image: grafana/tempo:2.4.1
+    image: grafana/tempo:2.6.1
     command: ["-config.file=/etc/tempo.yaml"]
     ports:
       - "127.0.0.1:4317:4317"   # OTLP gRPC
-      - "127.0.0.1:3200:3200"   # Tempo HTTP
+      - "127.0.0.1:3200:3200"   # Tempo HTTP API (Grafana datasource)
+      - "127.0.0.1:4318:4318"   # OTLP HTTP
     volumes:
       - ./infra/tempo/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
@@ -235,6 +247,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
