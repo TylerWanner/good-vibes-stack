@@ -254,10 +254,17 @@ class Repo(Base):
     readme_text: Mapped[str | None] = mapped_column(Text)
     last_update_summary: Mapped[str | None] = mapped_column(Text)
     last_checked_at = mapped_column(DateTime(timezone=True), nullable=True)
+    embedding = Column(Vector(768)) if Vector else Column(sa.LargeBinary)  # type: ignore[misc]
 
     __table_args__ = (
         sa.Index("idx_repos_owner_name", "owner", "name"),
         sa.Index("idx_repos_watched", "watched", postgresql_where=text("watched = true")),
+        sa.Index(
+            "idx_repos_embedding",
+            text("embedding vector_cosine_ops"),
+            postgresql_using="ivfflat",
+            postgresql_where=text("embedding IS NOT NULL"),
+        ),
         sa.Index(
             "idx_repos_fts",
             text(

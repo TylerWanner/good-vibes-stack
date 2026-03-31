@@ -61,6 +61,7 @@ class AsyncPostgresClient:
         score_min: int | None = None,
         source_type: str | None = None,
         include_private: bool = True,
+        missing_embeddings: bool = False,
         limit: int = 20,
         offset: int = 0,
         embedding: list[float] | None = None,
@@ -98,6 +99,9 @@ class AsyncPostgresClient:
             # All specified tags must be present (AND semantics)
             for tag in tags:
                 filters.append(t.c.tags.contains(sa.cast([tag], sa.ARRAY(sa.Text))))
+        if missing_embeddings:
+            filters.append(t.c.embedding.is_(None))
+            filters.append(t.c.status == "processed")
 
         where = sa.and_(*filters) if filters else sa.true()
 
@@ -153,12 +157,24 @@ class AsyncPostgresClient:
         return await self.list_articles(q=query, limit=limit, embedding=embedding, include_private=include_private)
 
     async def get_articles_stats(self) -> dict[str, Any]:
-        """Return count by status and recent failure info."""
+        """Return count by status, embedding coverage, and recent failure info."""
         t = Article.__table__
         async with self._session_factory() as session:
             count_stmt = sa.select(t.c.status, func.count().label("count")).group_by(t.c.status)
             result = await session.execute(count_stmt)
             counts = {row.status: row.count for row in result}
+
+            embed_stmt = sa.select(
+                func.count().label("total"),
+                func.count(t.c.embedding).label("with_embedding"),
+            ).where(t.c.status == "processed")
+            result = await session.execute(embed_stmt)
+            row = result.one()
+            embeddings = {
+                "total_processed": row.total,
+                "with_embedding": row.with_embedding,
+                "without_embedding": row.total - row.with_embedding,
+            }
 
             fail_stmt = (
                 sa.select(t.c.url, t.c.processed_at, t.c.failure_log)
@@ -168,7 +184,7 @@ class AsyncPostgresClient:
             )
             result = await session.execute(fail_stmt)
             recent_failures = [dict(r) for r in result.mappings().all()]
-            return {"counts": counts, "recent_failures": recent_failures}
+            return {"counts": counts, "embeddings": embeddings, "recent_failures": recent_failures}
 
     async def get_top_tags(self, *, limit: int = 200) -> list[dict[str, Any]]:
         """Return top tags across all processed articles, ordered by frequency."""
@@ -185,6 +201,14 @@ class AsyncPostgresClient:
             return [{"tag": row[0], "count": row[1]} for row in result.fetchall()]
 
 
+
+    async def delete_article_by_url(self, *, url: str) -> bool:
+        """Delete an article by URL. Returns True if a row was deleted."""
+        t = Article.__table__
+        async with self._session_factory() as session:
+            result = await session.execute(sa.delete(t).where(t.c.url == url))
+            await session.commit()
+            return result.rowcount > 0
 
     # ------------------------------------------------------------------
     # Articles - Write

@@ -277,7 +277,7 @@ def resolve_telegram_target(notify: dict | None = None) -> tuple[str, str] | Non
     import os
 
     notify = notify or {}
-    bot = notify.get("bot")  # None → load_telegram_bot_token uses default
+    bot = notify.get("bot")  # None → load_telegram_bot_token uses default (default)
     token = load_telegram_bot_token(bot=bot)
     chat_id = notify.get("chat_id") or os.getenv("TELEGRAM_CHAT_ID")
     if not token:

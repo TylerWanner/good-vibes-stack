@@ -48,10 +48,7 @@ def load_settings() -> Settings:
         readwise_base_url=os.getenv("READWISE_BASE_URL", "https://readwise.io/api/v3"),
         llm_provider=os.getenv("SECOND_BRAIN_LLM_PROVIDER", "anthropic").strip().lower(),
         llm_model=os.getenv("SECOND_BRAIN_LLM_MODEL", "claude-3-5-sonnet-latest"),
-        ollama_base_url=os.getenv(
-            "SECOND_BRAIN_OLLAMA_BASE_URL",
-            os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
-        ),
+        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
         # Embedding provider is separate from LLM provider.
         # Set SECOND_BRAIN_EMBEDDING_PROVIDER=none to skip embeddings entirely
         # (semantic search won't work but everything else will).

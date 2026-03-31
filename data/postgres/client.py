@@ -314,6 +314,17 @@ class PostgresClient:
             )
             session.commit()
 
+    def store_repo_embedding(self, repo_id: str, embedding: list[float]) -> None:
+        """Store embedding vector for a repo."""
+        from data.postgres.models import Repo
+        with self._session_factory() as session:
+            session.execute(
+                sa.update(Repo)
+                .where(Repo.__table__.c.id == repo_id)
+                .values(embedding=embedding)
+            )
+            session.commit()
+
     def get_article_id_by_url(self, url: str) -> str | None:
         """Get article UUID by URL."""
         with self._session_factory() as session:
