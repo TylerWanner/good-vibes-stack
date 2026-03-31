@@ -73,7 +73,7 @@ export default function secondBrainTools(context: PluginContext): void {
           type: "object",
           description: "Optional notification routing envelope for async completion messages",
           properties: {
-            context: { type: "string" },
+            bot: { type: "string", description: "Bot name for notifications" },
             channel: { type: "string" },
             account_id: { type: "string" },
             chat_id: { type: "string" },
@@ -92,7 +92,7 @@ export default function secondBrainTools(context: PluginContext): void {
           type: "object",
           description: "Optional notification routing envelope for async completion messages",
           properties: {
-            context: { type: "string" },
+            bot: { type: "string", description: "Bot name for notifications" },
             channel: { type: "string" },
             account_id: { type: "string" },
             chat_id: { type: "string" },
@@ -111,7 +111,7 @@ export default function secondBrainTools(context: PluginContext): void {
           type: "object",
           description: "Optional notification routing envelope for async completion messages",
           properties: {
-            context: { type: "string" },
+            bot: { type: "string", description: "Bot name for notifications" },
             channel: { type: "string" },
             account_id: { type: "string" },
             chat_id: { type: "string" },
@@ -125,8 +125,12 @@ export default function secondBrainTools(context: PluginContext): void {
       const url = String(args.url || "");
       const force = args.force === true;
       const notifyArg = (args.notify && typeof args.notify === "object") ? args.notify as Record<string, unknown> : {};
+      // Agent name from explicit arg or AGENT_NAME env var
+      const botValue = typeof notifyArg.bot === "string" 
+        ? notifyArg.bot 
+        : (process.env.AGENT_NAME || undefined);
       const notify = {
-        context: typeof notifyArg.context === "string" ? notifyArg.context : (process.env.AGENT_NAME || undefined),
+        bot: botValue,
         channel: typeof notifyArg.channel === "string" ? notifyArg.channel : undefined,
         account_id: typeof notifyArg.account_id === "string" ? notifyArg.account_id : undefined,
         chat_id: typeof notifyArg.chat_id === "string" ? notifyArg.chat_id : undefined,
@@ -214,7 +218,7 @@ export default function secondBrainTools(context: PluginContext): void {
     execute: async (_id, args) => {
       const query = String(args.query || "");
       const limit = Number.isFinite(Number(args.limit)) ? Number(args.limit) : 10;
-      const endpoint = new URL("/ingest", baseUrl);
+      const endpoint = new URL("/articles", baseUrl);
       endpoint.searchParams.set("q", query);
       endpoint.searchParams.set("limit", String(limit));
 

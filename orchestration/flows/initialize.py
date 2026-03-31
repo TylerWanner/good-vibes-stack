@@ -124,7 +124,7 @@ def validate() -> dict[str, Any]:
         issues.append(f"Prefect API unreachable: {exc}")
 
     # Check blocks
-    for block_name in ["s3-backup-credentials", "twitter-credentials", "readwise-credentials", "brave-credentials"]:
+    for block_name in ["anthropic-credentials", "s3-backup-credentials", "twitter-credentials", "readwise-credentials", "brave-credentials"]:
         try:
             Secret.load(block_name)
             logger.info("✅ block: %s", block_name)

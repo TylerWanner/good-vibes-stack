@@ -1,7 +1,8 @@
 # Control Planes and Authority Boundaries
 
 This stack contains multiple systems that can observe, decide, or cause side effects.
-Therefore, it's important to prevent their authority from blurring together.
+That is fine.
+What is not fine is letting their authority blur together.
 
 This document defines which plane owns which kind of power.
 
@@ -51,20 +52,28 @@ It does not decide the strategy.
 
 ### 3. Application services — the domain planes
 
-Application services own their domain semantics. In this stack, the Second Brain is the primary example: it owns the full knowledge lifecycle — ingest, fetch, analyze, score, store, retrieve. It has its own API surface, its own domain state in Postgres, and its own rules about what constitutes valid content and how it should be processed.
+Application services own their domain semantics.
+
+Examples:
+- second-brain API owns article/query/ingest domain behavior
+- Postgres owns durable domain state
+- other app services should own their own domain logic and storage contracts
 
 Application services are responsible for:
-- domain rules and state transitions
+- domain rules
+- domain state transitions
 - validation inside their domain
 - stable APIs for their part of the system
 
-They are **not** supposed to become generic orchestration layers. The Second Brain doesn't schedule its own retries — it exposes domain state and lets Prefect handle execution. The boundary matters.
+They are **not** supposed to become generic orchestration layers.
 
 ---
 
 ### 4. Bounded infrastructure control planes — mutation with guardrails
 
-Example: safe-docker — a narrow API that allows specific lifecycle operations (restart, status, logs) while blocking everything else (exec, run, arbitrary compose commands).
+Examples:
+- docker-ops
+- safe-docker / Warden direction
 
 These systems exist because infrastructure mutation is too dangerous to expose as ambient shell or raw Docker access.
 
@@ -81,13 +90,20 @@ If a tool can do everything, it is not a bounded control plane. It is just power
 
 ---
 
-### 5. Scripts — bootstrap and repair
+### 5. Scripts — bootstrap and repair tools
 
-Scripts exist for setup and recovery. `init.sh` is idempotent and safe to re-run, but it is not part of normal operations — once the stack is running, everything is driven through the API, control planes, or Prefect flows.
+Scripts are allowed because systems need setup and recovery paths.
 
-The only operations that legitimately require going outside the system are those that **introduce new capabilities or code changes** to the components themselves — specifically, building new images. A new flow, a dependency update, a service change: these require a `docker compose build` and are intentionally human-gated. Everything else the stack can handle itself.
+They are responsible for:
+- bootstrap
+- restore
+- migration
+- local setup
+- emergency repair
 
-If something requires a script to do what an API or control plane should handle, that's the gap to close — not a reason to normalize the script.
+They are **not** the intended steady-state operational interface.
+
+If normal system behavior depends on remembering ad hoc scripts, the architecture is not done consolidating.
 
 ---
 
@@ -127,20 +143,6 @@ Scripts may initialize or repair the system.
 They should not quietly become the hidden main interface.
 
 **Rule:** if a script becomes a routine dependency of normal operations, it should either be promoted into a proper control plane or its capability should be made declarative.
-
----
-
-### Boundary E: agent → flow code
-
-The agent may write and propose flow code. It may not deploy it unilaterally.
-
-Flow code is baked into the worker image at build time — not mounted from a live volume. This means a code change alone does not take effect. The worker must be rebuilt and recreated.
-
-**Rule:** deploying new or modified flow code requires a human-initiated image build. The agent proposes; the build is the gate.
-
-`docker compose build prefect-worker` is a `dangerous` operation in safe-docker — it requires explicit opt-in. This is intentional. The build step is the human-in-the-loop checkpoint between agent-authored code and running code.
-
-**Trust assumption to name explicitly:** if safe-docker allows the build operation, and the repo is mounted into the build context, then an agent with write access to the repo has a path to arbitrary code execution — write code, trigger build, code runs. The build gate slows this down and requires human opt-in, but it does not eliminate the surface. In a production deployment where the agent should not have this capability, the repo mount should be scoped to only the directories the agent legitimately needs to write to — not the entire codebase. This is an open design question for hardened deployments.
 
 ---
 

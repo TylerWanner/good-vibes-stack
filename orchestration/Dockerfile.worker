@@ -1,19 +1,20 @@
-FROM python:3.12-slim
+FROM python:3.12.9-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
         postgresql-client \
-        git \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy dependency files first for layer caching
 COPY pyproject.toml ./
+COPY config/ ./config/
 COPY data/ ./data/
 COPY integrations/ ./integrations/
-COPY nervous_system/ ./nervous_system/
+COPY nervous_system/__init__.py ./nervous_system/
 COPY orchestration/ ./orchestration/
 COPY second_brain/ ./second_brain/
 COPY shared/ ./shared/
