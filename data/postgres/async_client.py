@@ -111,8 +111,6 @@ class AsyncPostgresClient:
 
         elif q and embedding:
             # Semantic search — order by cosine distance, filters still apply
-            # Set ivfflat.probes higher so more index lists are searched (default=1 is too low)
-            await session.execute(sa.text("SET LOCAL ivfflat.probes = 20"))
             stmt = (
                 sa.select(*cols, t.c.embedding.cosine_distance(embedding).label("distance"))
                 .where(sa.and_(where, t.c.embedding.isnot(None)))
@@ -148,6 +146,9 @@ class AsyncPostgresClient:
             )
 
         async with self._session_factory() as session:
+            # Boost ivfflat probe count for semantic search (default=1 is too low for 800+ rows)
+            if q and embedding is not None:
+                await session.execute(sa.text("SET ivfflat.probes = 20"))
             result = await session.execute(stmt)
             return [_serialize_row(dict(r)) for r in result.mappings().all()]
 
