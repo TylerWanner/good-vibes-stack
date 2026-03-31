@@ -15,8 +15,8 @@ def _to_json_url(url: str) -> str:
     # Strip query params and fragments
     url = url.split("?")[0].split("#")[0].rstrip("/")
     # Use old.reddit.com for more reliable JSON responses
-    url = url.replace("www.reddit.com", "old.reddit.com")
-    url = url.replace("reddit.com", "old.reddit.com")
+    import re as _re
+    url = _re.sub(r"(?:www\.)?reddit\.com", "old.reddit.com", url)
     if not url.endswith(".json"):
         url += ".json"
     return url

@@ -318,6 +318,7 @@ class RecentFailure(APIModel):
 class ArticleStatsResponse(APIModel):
     """Aggregate statistics for the knowledge base."""
     counts: dict[str, int] = Field(..., description="Article counts by status")
+    embeddings: dict[str, int] = Field(default_factory=dict, description="Embedding coverage for processed articles")
     recent_failures: list[RecentFailure] = Field(default_factory=list, description="Recent processing failures")
 
 
@@ -544,6 +545,7 @@ async def list_articles(
     score_min: int | None = Query(None, ge=1, le=5, description="Min score_usefulness"),
     source_type: str | None = Query(None, description="Filter by source type: tweet, article, youtube, etc."),
     include_private: bool = Query(True),
+    missing_embeddings: bool = Query(False, description="If true, return only processed articles missing embeddings"),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[ArticleResponse]:
@@ -554,6 +556,7 @@ async def list_articles(
     - `GET /articles?url=<url>` → exact URL lookup
     - `GET /articles?status=failed&since=2026-03-01` → filtered list
     - `GET /articles?tags=agent,prefect&score_min=4` → high-quality agent articles
+    - `GET /articles?missing_embeddings=true` → processed articles missing embeddings
     """
     embedding: list[float] | None = None
     if q:
@@ -575,6 +578,7 @@ async def list_articles(
         score_min=score_min,
         source_type=source_type,
         include_private=include_private,
+        missing_embeddings=missing_embeddings,
         limit=limit,
         offset=offset,
         embedding=embedding,
@@ -673,11 +677,21 @@ async def get_articles_stats(db: DB) -> ArticleStatsResponse:
     stats = await db.get_articles_stats()
     return ArticleStatsResponse(
         counts=stats["counts"],
+        embeddings=stats.get("embeddings", {}),
         recent_failures=[RecentFailure(**f) for f in stats["recent_failures"]],
     )
 
 
 
+
+
+@app.delete("/articles", tags=["articles"])
+async def delete_article(db: DB, url: str = Query(..., description="URL of article to delete")) -> dict:
+    """Delete an article by URL."""
+    deleted = await db.delete_article_by_url(url=url)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return {"status": "deleted", "url": url}
 
 
 @app.post("/articles/retry-failed", tags=["flows"], response_model=DispatchResponse)
