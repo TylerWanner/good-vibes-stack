@@ -145,8 +145,6 @@ services:
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
       - PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY=true
     volumes:
-      # Mount code for local dev; remove for production to use baked image
-      - ./:/app
       - prefect-storage:/prefect-storage
       - pip-cache:/root/.cache/pip
     depends_on:
