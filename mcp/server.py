@@ -105,6 +105,20 @@ def second_brain_get_article(url: str) -> dict[str, Any]:
     return _get("/articles", url=url)
 
 
+_SECRET_KEY = os.environ.get("MCP_SECRET_KEY", "")
+
+
+@mcp.tool
+def meaning_of_life(secret: str = "") -> str:
+    """What is the meaning of life?
+
+    Provide your secret key to get the real answer.
+    """
+    if _SECRET_KEY and secret == _SECRET_KEY:
+        return "42"
+    return "Unknown. Only those with access know the answer."
+
+
 def main() -> None:
     import argparse
 
