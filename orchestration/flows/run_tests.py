@@ -74,11 +74,13 @@ def run_tests(
         emoji = "✅" if passed else "❌"
         msg = f"{emoji} Test suite {status}\n`{summary or f'exit {result.returncode}'}`"
         try:
+            import os
             from nervous_system.notifications.telegram import send_telegram_message
-            from shared.secrets import load_telegram_credentials
-            creds = load_telegram_credentials()
-            if creds:
-                send_telegram_message(creds.bot_token, creds.chat_id, msg)
+            from shared.secrets import load_telegram_bot_token
+            token = load_telegram_bot_token(bot="default")
+            chat_id = os.getenv("TELEGRAM_CHAT_ID")
+            if token and chat_id:
+                send_telegram_message(token, chat_id, msg)
         except Exception as exc:
             logger.warning("Notification failed: %s", exc)
 

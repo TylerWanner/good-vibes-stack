@@ -30,7 +30,7 @@ What has been captured so far:
 
 Now process the next section. Extract NEW information that adds to or deepens what's already captured above. Avoid repeating what's already covered. If this section introduces new tools, names, techniques, steps, metrics, or insights not yet captured — add them. If it deepens or contradicts something already captured — note that.
 
-Return plain text. Be dense and specific. No meta-commentary. Just the extracted knowledge, building on what came before.
+IMPORTANT: Return ONLY plain prose text. NO JSON. NO bullet points. NO structured formatting. Write in dense, flowing sentences. Be specific. No meta-commentary. Just the extracted knowledge, building on what came before.
 
 Section {chunk_num} of {chunk_total}:
 {content}

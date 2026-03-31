@@ -100,10 +100,12 @@ def post_to_twitter(draft: dict[str, Any]) -> dict[str, Any]:
 @task
 def notify_tweet_posted(tweet: dict[str, Any]) -> bool:
     """Send a Telegram notification when a tweet is posted."""
-    from shared.secrets import load_telegram_credentials
+    import os
+    from shared.secrets import load_telegram_bot_token
     
-    creds = load_telegram_credentials()
-    if not creds:
+    token = load_telegram_bot_token(bot="default")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
         return False
 
     tweet_id = tweet.get("id", "")
@@ -118,9 +120,9 @@ def notify_tweet_posted(tweet: dict[str, Any]) -> bool:
 
     message = "\n".join(lines)
     response = requests.post(
-        f"https://api.telegram.org/bot{creds.bot_token}/sendMessage",
+        f"https://api.telegram.org/bot{token}/sendMessage",
         json={
-            "chat_id": creds.chat_id,
+            "chat_id": chat_id,
             "text": message,
             "parse_mode": "Markdown",
             "disable_web_page_preview": True,
