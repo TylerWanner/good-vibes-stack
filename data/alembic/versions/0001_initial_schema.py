@@ -4,8 +4,11 @@ Revision ID: 0001
 Revises:
 Create Date: 2026-03-26 00:00:00
 
-This is a squashed migration combining all previous migrations into a single
+Squashed migration — combines all previous migrations into a single
 initial schema for fresh deployments.
+
+Shared between provision (private stack) and good-vibes-stack (public OSS).
+models.py is the source of truth; this migration must stay in sync with it.
 """
 from __future__ import annotations
 
@@ -25,7 +28,7 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
     # -------------------------------------------------------------------------
-    # articles table
+    # articles
     # -------------------------------------------------------------------------
     op.create_table(
         "articles",
@@ -48,27 +51,27 @@ def upgrade() -> None:
         sa.Column("score_usefulness", sa.SmallInteger, nullable=True),
         sa.Column("score_interest", sa.SmallInteger, nullable=True),
         sa.Column("score_pov", sa.SmallInteger, nullable=True),
-        sa.Column("score_uniqueness", sa.Integer, nullable=True),
+        sa.Column("score_uniqueness", sa.SmallInteger, nullable=True),
         sa.Column("content_date", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint("score_usefulness BETWEEN 1 AND 5", name="ck_articles_score_usefulness"),
         sa.CheckConstraint("score_interest BETWEEN 1 AND 5", name="ck_articles_score_interest"),
         sa.CheckConstraint("score_pov BETWEEN 1 AND 5", name="ck_articles_score_pov"),
+        sa.CheckConstraint("score_uniqueness BETWEEN 1 AND 5", name="ck_articles_score_uniqueness"),
     )
-    # pgvector column (can't use sa.Column directly)
     op.execute("ALTER TABLE articles ADD COLUMN embedding vector(768);")
 
-    # Indexes
     op.create_index("idx_articles_processed_at", "articles", ["processed_at"], postgresql_using="btree")
     op.create_index("idx_articles_status", "articles", ["status"])
     op.create_index("idx_articles_privacy", "articles", ["privacy"])
     op.create_index("idx_articles_contributor", "articles", ["contributor"])
     op.create_index("idx_articles_score_pov", "articles", ["score_pov"],
                     postgresql_where=sa.text("score_pov IS NOT NULL"))
-    op.create_index("idx_articles_content_date", "articles", ["content_date"],
-                    postgresql_where=sa.text("content_date IS NOT NULL"))
+    op.create_index("idx_articles_score_uniqueness", "articles", ["score_uniqueness"],
+                    postgresql_where=sa.text("score_uniqueness IS NOT NULL"))
     op.execute("""
         CREATE INDEX idx_articles_embedding ON articles
-        USING ivfflat (embedding vector_cosine_ops) WHERE embedding IS NOT NULL;
+        USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64);
     """)
     op.execute("""
         CREATE INDEX idx_articles_fts ON articles
@@ -76,7 +79,7 @@ def upgrade() -> None:
     """)
 
     # -------------------------------------------------------------------------
-    # digests table
+    # digests
     # -------------------------------------------------------------------------
     op.create_table(
         "digests",
@@ -89,7 +92,7 @@ def upgrade() -> None:
     )
 
     # -------------------------------------------------------------------------
-    # ingest_jobs table (legacy, kept for compatibility)
+    # ingest_jobs (legacy, kept for compatibility)
     # -------------------------------------------------------------------------
     op.create_table(
         "ingest_jobs",
@@ -105,7 +108,7 @@ def upgrade() -> None:
     op.create_index("idx_ingest_jobs_created_at", "ingest_jobs", ["created_at"])
 
     # -------------------------------------------------------------------------
-    # ingests table (new unified ingest tracking)
+    # ingests
     # -------------------------------------------------------------------------
     op.create_table(
         "ingests",
@@ -124,7 +127,7 @@ def upgrade() -> None:
     op.create_index("idx_ingests_url", "ingests", ["url"])
 
     # -------------------------------------------------------------------------
-    # settings table
+    # settings
     # -------------------------------------------------------------------------
     op.create_table(
         "settings",
@@ -133,7 +136,7 @@ def upgrade() -> None:
     )
 
     # -------------------------------------------------------------------------
-    # watched_accounts table (third brain)
+    # watched_accounts
     # -------------------------------------------------------------------------
     op.create_table(
         "watched_accounts",
@@ -152,7 +155,7 @@ def upgrade() -> None:
     op.create_index("idx_watched_accounts_active", "watched_accounts", ["active", "platform"])
 
     # -------------------------------------------------------------------------
-    # repos table (GitHub repo tracking)
+    # repos
     # -------------------------------------------------------------------------
     op.create_table(
         "repos",
@@ -182,11 +185,18 @@ def upgrade() -> None:
         sa.Column("status", sa.Text, nullable=False, server_default="pending"),
         sa.Column("error_message", sa.Text, nullable=True),
     )
+    op.execute("ALTER TABLE repos ADD COLUMN embedding vector(768);")
+
     op.create_index("idx_repos_owner_name", "repos", ["owner", "name"])
     op.create_index("idx_repos_watched", "repos", ["watched"],
                     postgresql_where=sa.text("watched = true"))
     op.create_index("idx_repos_last_push_at", "repos", ["last_push_at"],
                     postgresql_where=sa.text("last_push_at IS NOT NULL"))
+    op.execute("""
+        CREATE INDEX idx_repos_embedding ON repos
+        USING ivfflat (embedding vector_cosine_ops)
+        WHERE embedding IS NOT NULL;
+    """)
     op.execute("""
         CREATE INDEX idx_repos_fts ON repos
         USING gin(to_tsvector('english',
@@ -198,7 +208,7 @@ def upgrade() -> None:
     """)
 
     # -------------------------------------------------------------------------
-    # skills table
+    # skills
     # -------------------------------------------------------------------------
     op.create_table(
         "skills",

@@ -108,13 +108,20 @@ else:
 # API Key Authentication
 # ---------------------------------------------------------------------------
 _API_KEY = os.getenv("API_SECRET_KEY", "").strip()
+_ALLOW_UNAUTHENTICATED_API = os.getenv("ALLOW_UNAUTHENTICATED_API", "").strip().lower() in {"1", "true", "yes", "on"}
+
+if not _API_KEY and not _ALLOW_UNAUTHENTICATED_API:
+    raise RuntimeError(
+        "API_SECRET_KEY is required. Set ALLOW_UNAUTHENTICATED_API=true only for explicit local dev."
+    )
 
 
 @app.middleware("http")
 async def check_api_key_middleware(request: Request, call_next: Any) -> Any:
     """Enforce API key on all requests except health check.
-    
-    If API_SECRET_KEY is not set, auth is disabled (dev mode).
+
+    Fail closed by default. Unauthenticated mode requires explicit
+    ALLOW_UNAUTHENTICATED_API=true for local development.
     """
     # Health endpoint is always open
     if request.url.path == "/health":
@@ -123,14 +130,13 @@ async def check_api_key_middleware(request: Request, call_next: Any) -> Any:
     if request.method == "OPTIONS":
         return await call_next(request)
     if not _API_KEY:
-        # Dev mode — no auth required
         return await call_next(request)
-    
+
     api_key = request.headers.get("X-API-Key", "")
     if api_key != _API_KEY:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
-    
+
     return await call_next(request)
 
 # ---------------------------------------------------------------------------
@@ -243,35 +249,7 @@ class IngestTextRequest(APIModel):
     tags: str = Field("", description="Comma-separated tags")
 
 
-class TwitterFollowRequest(APIModel):
-    """Request to follow/unfollow a Twitter user."""
-    username: str = Field(..., description="Twitter username to follow/unfollow")
 
-
-class MedicineAckRequest(APIModel):
-    """Request to acknowledge a medicine reminder."""
-    window: str = Field(..., description="Reminder window: morning or afternoon")
-
-
-class WriteArticleRequest(APIModel):
-    """Request to trigger the iterative article writing flow."""
-    topic: str = Field(..., description="Topic to write about")
-    angle: str = Field("", description="Specific angle or perspective")
-    format: str = Field("thread", description="Output format: thread, blog, essay")
-    drafts: int = Field(3, ge=1, le=10, description="Number of drafts to generate")
-    edit_rounds: int = Field(2, ge=0, le=5, description="Number of edit iterations")
-    output_path: str | None = Field(None, description="Custom output path (defaults to config)")
-    use_second_brain: bool = Field(True, description="Pull context from second brain")
-    notify: bool = Field(True, description="Send Telegram notification on completion")
-
-
-class PostTweetRequest(APIModel):
-    """Request to draft and post a tweet."""
-    days: int = Field(7, ge=1, le=30, description="Days of content to consider")
-    article_limit: int = Field(20, ge=1, le=100, description="Max articles to pull")
-    draft_count: int = Field(5, ge=1, le=10, description="Number of drafts to generate")
-    dry_run: bool = Field(False, description="Draft without posting")
-    text: str | None = Field(None, description="Override text (skip drafting)")
 
 
 # --- Response Models ---
@@ -452,59 +430,12 @@ class DrainResponse(APIModel):
     total: int | None = Field(None, description="Total runs affected (dry_run only)")
 
 
-# ---------------------------------------------------------------------------
-# Private endpoint response models
-# ---------------------------------------------------------------------------
-
-class MedicineAckResponse(APIModel):
-    """Response for medicine acknowledgement."""
-    status: str = Field(..., description="Operation status")
-    window: str | None = Field(None, description="Window acknowledged")
-    message: str | None = Field(None, description="Result message")
-
-
-class MedicineCheckResponse(APIModel):
-    """Response for medicine reminder check."""
-    status: str = Field(..., description="Operation status")
-    message: str | None = Field(None, description="Result message")
-    needs_reminder: bool | None = Field(None, description="Whether reminder was sent")
-
-
-class TweetResponse(APIModel):
-    """Response for tweet operations."""
-    status: str = Field(..., description="Operation status")
-    tweet_id: str | None = Field(None, description="Tweet ID if posted")
-    text: str | None = Field(None, description="Tweet text")
-    dry_run: bool = Field(False, description="Whether this was a dry run")
-
-
-class TwitterUserResponse(APIModel):
-    """Response for Twitter follow/unfollow operations."""
-    success: bool = Field(..., description="Whether operation succeeded")
-    username: str = Field(..., description="Target username")
-    user_id: str | None = Field(None, description="Twitter user ID")
-    error: str | None = Field(None, description="Error message if failed")
-
-
-class TwitterFollowingResponse(APIModel):
-    """Response for Twitter following list."""
-    count: int = Field(..., description="Number of users returned")
-    following: list[dict] = Field(default_factory=list, description="List of followed users")
-
-
 class ImageIngestResponse(APIModel):
     """Response for image ingestion."""
     status: str = Field(..., description="Operation status")
     url: str = Field(..., description="Synthetic URL for the stored content")
     file_path: str | None = Field(None, description="MinIO path if stored")
     privacy: str = Field(..., description="Content visibility")
-
-
-class WriteArticleResponse(APIModel):
-    """Response for article writing dispatch."""
-    status: str = Field(..., description="Operation status")
-    topic: str = Field(..., description="Article topic")
-    message: str | None = Field(None, description="Status message")
 
 
 class TestNotificationResponse(APIModel):
@@ -1102,90 +1033,6 @@ async def ops_drain(request: DrainRequest) -> DrainResponse:
     )
 
 
-@app.post("/medicine/ack", tags=["private"], response_model=MedicineAckResponse)
-async def run_medicine_ack(request: MedicineAckRequest) -> MedicineAckResponse:
-    """Acknowledge a medicine reminder window (morning or afternoon).
-    Called by agent when user taps the ✅ Taken button.
-    """
-    import asyncio
-    from orchestration.flows.medicine_reminder import medicine_reminder_ack  # Inline: avoids Prefect import at startup
-    result = await asyncio.to_thread(medicine_reminder_ack, window=request.window)
-    return MedicineAckResponse(status="ok", window=request.window, message=result.get("message"))
-
-
-@app.post("/medicine/check", tags=["private"], response_model=MedicineCheckResponse)
-async def run_medicine_check() -> MedicineCheckResponse:
-    """Manually trigger a medicine reminder check."""
-    import asyncio
-    from orchestration.flows.medicine_reminder import medicine_reminder_check  # Inline: avoids Prefect import at startup
-    result = await asyncio.to_thread(medicine_reminder_check)
-    return MedicineCheckResponse(status="ok", message=result.get("message"), needs_reminder=result.get("needs_reminder"))
-
-
-@app.post("/twitter/tweet", tags=["private"], response_model=TweetResponse)
-async def run_post_tweet(request: PostTweetRequest) -> TweetResponse:
-    """Draft and post a tweet from recent second brain content.
-
-    Set dry_run=true to draft without posting.
-    """
-    from orchestration.prefect.client import trigger_deployment_async
-    try:
-        await trigger_deployment_async("post-tweet", "post-tweet", parameters={
-            "days": request.days,
-            "article_limit": request.article_limit,
-            "draft_count": request.draft_count,
-            "dry_run": request.dry_run,
-            "text": request.text,
-        })
-        return TweetResponse(status="queued", tweet_id=None, text=None, dry_run=request.dry_run)
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Failed to queue tweet flow: {e}")
-
-
-def _get_twitter_client() -> Any:
-    """Create TwitterClient from Prefect block credentials."""
-    from integrations.twitter import TwitterClient
-    from shared.secrets import load_twitter_credentials
-    
-    creds = load_twitter_credentials()
-    if not creds:
-        raise HTTPException(status_code=503, detail="Twitter credentials not configured (twitter-credentials block)")
-    
-    return TwitterClient(
-        api_key=creds.api_key,
-        api_secret=creds.api_secret,
-        access_token=creds.access_token,
-        access_token_secret=creds.access_token_secret,
-    )
-
-
-@app.post("/twitter/follow", tags=["private"], response_model=TwitterUserResponse)
-async def twitter_follow(request: TwitterFollowRequest) -> TwitterUserResponse:
-    """Follow a Twitter user by username."""
-    import asyncio
-    client = _get_twitter_client()
-    result = await asyncio.to_thread(client.follow_user, username=request.username)
-    return TwitterUserResponse(success=result.get("success", True), username=request.username, user_id=result.get("user_id"))
-
-
-@app.post("/twitter/unfollow", tags=["private"], response_model=TwitterUserResponse)
-async def twitter_unfollow(request: TwitterFollowRequest) -> TwitterUserResponse:
-    """Unfollow a Twitter user by username."""
-    import asyncio
-    client = _get_twitter_client()
-    result = await asyncio.to_thread(client.unfollow_user, username=request.username)
-    return TwitterUserResponse(success=result.get("success", True), username=request.username, user_id=result.get("user_id"))
-
-
-@app.get("/twitter/following", tags=["private"], response_model=TwitterFollowingResponse)
-async def twitter_following(max_results: int = 100) -> TwitterFollowingResponse:
-    """Get list of users the configured account is following."""
-    import asyncio
-    client = _get_twitter_client()
-    users = await asyncio.to_thread(client.get_following, max_results=max_results)
-    return TwitterFollowingResponse(count=len(users), following=users)
-
-
 @app.post("/research", tags=["flows"], response_model=DispatchResponse)
 async def run_research(request: ResearchRequest) -> DispatchResponse:
     """Dispatch research-topic as a Prefect deployment run (fire-and-forget)."""
@@ -1310,216 +1157,7 @@ async def save_text(request: IngestTextRequest, db: DB) -> IngestTextResponse:
     return IngestTextResponse(status="stored", url=synthetic_url, privacy=request.privacy)
 
 
-@app.post("/write/article", tags=["private"], response_model=WriteArticleResponse)
-async def write_article_endpoint(request: WriteArticleRequest) -> WriteArticleResponse:
-    """
-    Trigger the iterative article writing flow via Prefect.
-
-    Qwen generates N drafts → Claude scores → best draft selected → 
-    Claude/Qwen edit cycles → final voice pass → saved to disk.
-    """
-    from orchestration.prefect.client import trigger_deployment_async
-    resolved_output_path = request.output_path or settings.article_drafts_path
-    try:
-        await trigger_deployment_async("write-article", "write-article", parameters={
-            "topic": request.topic,
-            "angle": request.angle,
-            "format": request.format,
-            "drafts": request.drafts,
-            "edit_rounds": request.edit_rounds,
-            "output_path": resolved_output_path,
-            "use_second_brain": request.use_second_brain,
-            "notify": request.notify,
-        })
-        return WriteArticleResponse(
-            status="queued",
-            topic=request.topic,
-            message="Writing dispatched to Prefect — notification will be sent when done.",
-        )
-    except Exception as exc:
-        return WriteArticleResponse(
-            status="error",
-            topic=request.topic,
-            message=f"Prefect dispatch failed: {str(exc)[:200]}",
-        )
-
-
 # ---------------------------------------------------------------------------
-# Build Approval HITL
-# ---------------------------------------------------------------------------
-# In-memory token store: {request_id: {token, expires_at, used, service, outcome}}
-# Not persisted — tokens are short-lived (2min TTL) by design.
-# The agent never receives the token; it lives server-side only.
-# ---------------------------------------------------------------------------
-
-import secrets as _secrets
-import threading as _threading
-from datetime import timezone as _tz, timedelta as _timedelta
-
-_BUILD_TOKENS: dict[str, dict] = {}
-_BUILD_TOKENS_LOCK = _threading.Lock()
-_BUILD_TOKEN_TTL_SECONDS = 120  # 2 minutes
-
-
-def _sweep_expired_tokens() -> None:
-    """Remove expired tokens from the store."""
-    now = _datetime.now(_tz.utc)
-    with _BUILD_TOKENS_LOCK:
-        expired = [rid for rid, t in _BUILD_TOKENS.items() if t["expires_at"] < now]
-        for rid in expired:
-            del _BUILD_TOKENS[rid]
-
-
-class BuildRequestResponse(APIModel):
-    status: str
-    request_id: str
-    message: str
-
-
-class BuildCallbackRequest(APIModel):
-    request_id: str
-    approved: bool
-
-
-@app.post("/ops/request-build", tags=["ops"], response_model=BuildRequestResponse)
-async def ops_request_build(
-    service: str = Query("prefect-worker", description="Service to build"),
-    reason: str = Query("", description="Optional reason from agent"),
-) -> BuildRequestResponse:
-    """Agent calls this to request a worker image rebuild.
-
-    Generates a one-time approval token (TTL: 2min), stores it server-side,
-    and sends a Telegram message with Approve/Deny buttons.
-    The agent never receives the token — it polls /ops/build-status/{request_id}.
-    """
-    import uuid as _uuid
-    _sweep_expired_tokens()
-
-    request_id = str(_uuid.uuid4())
-    expires_at = _datetime.now(_tz.utc) + _timedelta(seconds=_BUILD_TOKEN_TTL_SECONDS)
-
-    with _BUILD_TOKENS_LOCK:
-        _BUILD_TOKENS[request_id] = {
-            "expires_at": expires_at,
-            "used": False,
-            "service": service,
-            "outcome": None,  # "approved" | "denied" | None
-        }
-
-    msg = (
-        f"🔨 Build approval requested\n\n"
-        f"Service: {service}\n"
-        f"Request ID: {request_id[:8]}…\n"
-        f"Expires in: 2 minutes"
-    )
-    if reason:
-        msg += f"\nReason: {reason}"
-    msg += "\n\nApprove to trigger docker compose build for this service."
-
-    try:
-        import os
-        from shared.secrets import load_telegram_bot_token
-        token = load_telegram_bot_token(bot="default")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        if token and chat_id:
-            buttons = [[
-                {"text": "✅ Approve", "callback_data": f"build:approve:{request_id}"},
-                {"text": "❌ Deny",    "callback_data": f"build:deny:{request_id}"},
-            ]]
-            send_telegram_message(token, chat_id, msg, buttons=buttons)
-    except Exception as _e:
-        logger.warning("Failed to send build approval Telegram message: %s", _e)
-
-    return BuildRequestResponse(
-        status="pending_approval",
-        request_id=request_id,
-        message=f"Build approval requested for '{service}'. Waiting for human approval (TTL: 2min).",
-    )
-
-
-@app.post("/ops/build-callback", tags=["ops"])
-async def ops_build_callback(request: BuildCallbackRequest) -> dict:
-    """Called when human taps Approve/Deny on the Telegram message.
-
-    Validates the request, triggers safe-docker build on approval.
-    Single-use regardless of outcome.
-    """
-    _sweep_expired_tokens()
-
-    with _BUILD_TOKENS_LOCK:
-        entry = _BUILD_TOKENS.get(request.request_id)
-        if not entry:
-            raise HTTPException(status_code=404, detail="Request ID not found or expired")
-        if entry["used"]:
-            raise HTTPException(status_code=409, detail="Token already used")
-        if entry["expires_at"] < _datetime.now(_tz.utc):
-            raise HTTPException(status_code=410, detail="Token expired")
-        entry["used"] = True
-        entry["outcome"] = "approved" if request.approved else "denied"
-        service = entry["service"]
-
-    from shared.secrets import load_telegram_bot_token
-    token = load_telegram_bot_token(bot="default")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-
-    if not request.approved:
-        logger.info("Build request %s denied by human", request.request_id[:8])
-        if token and chat_id:
-            send_telegram_message(token, chat_id, f"❌ Build denied for `{service}`. No changes deployed.")
-        return {"status": "denied", "service": service}
-
-    # Approved — trigger safe-docker build
-    safe_docker_key = os.getenv("SAFE_DOCKER_API_KEY")
-    if not safe_docker_key:
-        try:
-            from shared.secrets import load_safe_docker_api_key
-            safe_docker_key = load_safe_docker_api_key()
-        except Exception:
-            pass
-
-    if not safe_docker_key:
-        logger.error("Build approved but SAFE_DOCKER_API_KEY not available")
-        if token and chat_id:
-            send_telegram_message(token, chat_id, f"⚠️ Build approved for `{service}` but safe-docker API key not configured.")
-        raise HTTPException(status_code=500, detail="safe-docker API key not available")
-
-    safe_docker_url = getattr(settings, "safe_docker_url", None) or "http://safe-docker:8080"
-    try:
-        import httpx as _httpx
-        async with _httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{safe_docker_url}/v1/projects/default/services/{service}/build",
-                headers={"X-API-Key": safe_docker_key},
-                timeout=300,  # builds can take a while
-            )
-            resp.raise_for_status()
-        logger.info("Build triggered for %s (request %s)", service, request.request_id[:8])
-        if token and chat_id:
-            send_telegram_message(token, chat_id, f"✅ Build triggered for `{service}`. I'll let you know when it's done.")
-        return {"status": "build_triggered", "service": service}
-    except Exception as exc:
-        logger.error("safe-docker build failed for %s: %s", service, exc)
-        if token and chat_id:
-            send_telegram_message(token, chat_id, f"⚠️ Build approved but safe-docker call failed for `{service}`: {str(exc)[:200]}")
-        raise HTTPException(status_code=502, detail=f"safe-docker build failed: {exc}")
-
-
-@app.get("/ops/build-status/{request_id}", tags=["ops"])
-async def ops_build_status(request_id: str) -> dict:
-    """Agent polls this to learn the outcome of a build approval request.
-
-    Returns status: pending | approved | denied | expired | not_found
-    """
-    _sweep_expired_tokens()
-    with _BUILD_TOKENS_LOCK:
-        entry = _BUILD_TOKENS.get(request_id)
-    if not entry:
-        return {"status": "not_found", "request_id": request_id}
-    if entry["expires_at"] < _datetime.now(_tz.utc) and not entry["used"]:
-        return {"status": "expired", "request_id": request_id}
-    if not entry["used"]:
-        return {"status": "pending", "request_id": request_id}
-    return {"status": entry["outcome"], "request_id": request_id, "service": entry["service"]}
 
 
 def main() -> None:
