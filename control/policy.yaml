@@ -16,11 +16,6 @@ logging:
   level: info
   format: json
 
-approval:
-  webhook_url: "${APPROVAL_WEBHOOK_URL}"
-  token_ttl_seconds: 120
-  token_ttl_max_seconds: 600
-
 # ---------------------------------------------------------------------------
 # Project policies
 #
