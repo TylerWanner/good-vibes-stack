@@ -42,12 +42,11 @@ COPY integrations/twitter.py ./integrations/
 # Shared utilities
 COPY shared/ ./shared/
 
-# Orchestration — only prefect client + medicine_reminder (called directly)
+# Orchestration — prefect client only
 COPY orchestration/__init__.py ./orchestration/
 COPY orchestration/prefect/ ./orchestration/prefect/
 RUN mkdir -p ./orchestration/flows
 COPY orchestration/flows/__init__.py ./orchestration/flows/
-COPY orchestration/flows/medicine_reminder.py ./orchestration/flows/
 
 # Install package metadata only (deps already installed)
 RUN pip install --no-cache-dir --no-deps .
