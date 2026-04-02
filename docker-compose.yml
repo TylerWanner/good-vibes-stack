@@ -188,7 +188,7 @@ services:
 
   # ─── Control Plane ──────────────────────────────────────────────────────────
   safe-docker:
-    image: ghcr.io/reptilianhq/safe-docker:0.1.1
+    image: ghcr.io/reptilianhq/safe-docker:0.2.0
     user: root  # Required to access Docker socket on macOS
     ports:
       - "127.0.0.1:8004:8080"
