@@ -12,7 +12,7 @@ Run via:
 Or directly (no worker needed):
   python -m orchestration.flows.initialize
 
-Note: for full block bootstrap (twitter, readwise, brave, r2), populate .env.blocks
+Note: for full block bootstrap (readwise, brave, r2, anthropic), populate .env.blocks
 and run scripts/sync_blocks.py before or after initialize.
 """
 from __future__ import annotations
@@ -124,7 +124,7 @@ def validate() -> dict[str, Any]:
         issues.append(f"Prefect API unreachable: {exc}")
 
     # Check blocks
-    for block_name in ["anthropic-credentials", "s3-backup-credentials", "twitter-credentials", "readwise-credentials", "brave-credentials"]:
+    for block_name in ["anthropic-credentials", "s3-backup-credentials", "readwise-credentials", "brave-credentials"]:
         try:
             Secret.load(block_name)
             logger.info("✅ block: %s", block_name)

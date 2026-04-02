@@ -19,7 +19,7 @@ dependencies = [
   "psycopg2-binary>=2.9.0",
   "python-dateutil>=2.9.0",
   "requests>=2.32.0",
-  "tweepy>=4.14.0",
+
   "boto3>=1.34.0",
   "uvicorn>=0.30.0",
   "yt-dlp>=2024.0.0",
@@ -52,7 +52,7 @@ env = [
 
 [project.scripts]
 second-brain-mcp = "mcp.server:main"
-second-brain-api = "nervous_system.http.server:main"
+nervous-system-api = "nervous_system.http.server:main"
 second-brain-ingest = "orchestration.flows.ingest_url:main"
 second-brain-weekly-digest = "orchestration.flows.weekly_digest:main"
 second-brain-post-tweet = "orchestration.flows.post_tweet:main"

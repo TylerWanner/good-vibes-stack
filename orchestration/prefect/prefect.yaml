@@ -65,26 +65,6 @@ deployments:
       job_variables: {}
     schedules: []  # Manual trigger only
 
-  - name: write-article
-    version: null
-    tags: ["second-brain", "content"]
-    description: "Iterative article writing: Qwen generates drafts, Claude scores/edits, saves final draft"
-    entrypoint: orchestration/flows/write_article.py:write_article
-    parameters:
-      topic: ""
-      angle: ""
-      format: "thread"
-      drafts: 3
-      edit_rounds: 2
-      output_path: null
-      use_second_brain: true
-      notify: true
-    work_pool:
-      name: default-pool
-      work_queue_name: default
-      job_variables: {}
-    schedules: []  # Manual trigger only
-
   - name: rescore-articles
     version: null
     tags: ["second-brain", "maintenance"]
@@ -159,23 +139,6 @@ deployments:
       - cron: "0 8 * * 1"  # Every Monday at 8am UTC
         timezone: "UTC"
         active: true
-
-  - name: post-tweet
-    version: null
-    tags: ["second-brain", "twitter"]
-    description: "Draft and post a tweet from recent second brain content"
-    entrypoint: orchestration/flows/post_tweet.py:post_tweet
-    parameters:
-      days: 7
-      article_limit: 20
-      draft_count: 5
-      dry_run: false
-      text: null
-    work_pool:
-      name: default-pool
-      work_queue_name: default
-      job_variables: {}
-    schedules: []  # Manual trigger only
 
   - name: run-migrations
     version: null

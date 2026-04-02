@@ -189,43 +189,6 @@ else
 fi
 echo ""
 
-# Twitter
-echo -e "${CYAN}Twitter / X (for post_tweet flow)${NC}"
-echo "  Leave blank to skip all Twitter fields"
-echo -n "  TWITTER_API_KEY: "
-read -rs twitter_api_key
-echo ""
-if [ -n "$twitter_api_key" ]; then
-  blocks_content+="TWITTER_API_KEY=${twitter_api_key}\n"
-  
-  echo -n "  TWITTER_API_SECRET: "
-  read -rs twitter_api_secret
-  echo ""
-  blocks_content+="TWITTER_API_SECRET=${twitter_api_secret}\n"
-  
-  echo -n "  TWITTER_ACCESS_TOKEN: "
-  read -rs twitter_access_token
-  echo ""
-  blocks_content+="TWITTER_ACCESS_TOKEN=${twitter_access_token}\n"
-  
-  echo -n "  TWITTER_ACCESS_TOKEN_SECRET: "
-  read -rs twitter_access_secret
-  echo ""
-  blocks_content+="TWITTER_ACCESS_TOKEN_SECRET=${twitter_access_secret}\n"
-  
-  echo -n "  TWITTER_BEARER_TOKEN (optional): "
-  read -rs twitter_bearer
-  echo ""
-  if [ -n "$twitter_bearer" ]; then
-    blocks_content+="TWITTER_BEARER_TOKEN=${twitter_bearer}\n"
-  fi
-  
-  echo -e "  ${GREEN}→ Twitter credentials saved [hidden]${NC}"
-else
-  echo -e "  ${YELLOW}→ Skipped${NC}"
-fi
-echo ""
-
 # S3 Backups
 echo -e "${CYAN}S3-compatible backups (AWS S3, Cloudflare R2, Backblaze B2, etc.)${NC}"
 echo "  Leave blank to skip"

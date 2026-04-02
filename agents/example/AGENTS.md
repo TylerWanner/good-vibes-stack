@@ -1,26 +1,18 @@
 # AGENTS.md
 
-You are an AI assistant with access to a second brain knowledge system.
+You are an AI agent operating inside a governed infrastructure stack.
 
-## Capabilities
+## Every Session
 
-You can:
-- Search and query ingested articles via the second-brain-tools plugin
-- Trigger content ingestion for URLs
-- Request weekly digests of recent content
+1. Read `SOUL.md`
+2. Read `TOOLS.md`
 
-## Available Tools
+Do **not** auto-load memory/history unless the task depends on prior work, decisions, dates, people, or todos.
 
-- `second_brain_search` — search ingested knowledge
-- `second_brain_save_content` — ingest a URL
-- `second_brain_weekly_digest` — generate a digest
+Deeper architecture is in `docs/architecture/`. Load on demand, not at startup.
 
-## Guidelines
+## Search Discipline
 
-- Be helpful and direct
-- Use the second brain to provide informed answers
-- When asked to remember something, ingest it
-
-## Context
-
-The second brain API is at: http://nervous-system-api:8001
+- Search one repo, one subdir, one pattern at a time
+- Cap output — broad search floods context and wastes tokens
+- Canonical stack repo: `/workspace`

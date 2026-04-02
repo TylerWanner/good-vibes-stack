@@ -23,7 +23,7 @@ Your data stays on your infra. The MCP server talks to your local `nervous-syste
 
 - Stack running (`docker compose up -d`)
 - Python 3.10+ with dependencies installed (`pip install -e .`)
-- `SECOND_BRAIN_API_URL` pointing at your `nervous-system-api` (default: `http://host.docker.internal:8001`)
+- `NERVOUS_SYSTEM_API_URL` pointing at your `nervous-system-api` (default: `http://host.docker.internal:8001`)
 
 ---
 
@@ -39,7 +39,7 @@ Add to your `claude_desktop_config.json` (`~/Library/Application Support/Claude/
       "args": ["-m", "mcp.server", "--transport", "stdio"],
       "cwd": "/path/to/good-vibes-stack",
       "env": {
-        "SECOND_BRAIN_API_URL": "http://localhost:8001"
+        "NERVOUS_SYSTEM_API_URL": "http://localhost:8001"
       }
     }
   }
@@ -52,14 +52,14 @@ Restart Claude Desktop. The second brain tools will appear in the tool picker.
 
 ## Cursor / other stdio clients
 
-Same pattern — run `python -m mcp.server --transport stdio` from the repo root with `SECOND_BRAIN_API_URL` set.
+Same pattern — run `python -m mcp.server --transport stdio` from the repo root with `NERVOUS_SYSTEM_API_URL` set.
 
 ---
 
 ## HTTP transport (remote clients)
 
 ```bash
-SECOND_BRAIN_API_URL=http://localhost:8001 python -m mcp.server \
+NERVOUS_SYSTEM_API_URL=http://localhost:8001 python -m mcp.server \
   --transport streamable-http \
   --host 0.0.0.0 \
   --port 8000 \
@@ -77,7 +77,7 @@ Connect any MCP HTTP client to `http://your-host:8000/mcp`.
 curl http://localhost:8001/health
 
 # Run the MCP server
-SECOND_BRAIN_API_URL=http://localhost:8001 python -m mcp.server --transport streamable-http
+NERVOUS_SYSTEM_API_URL=http://localhost:8001 python -m mcp.server --transport streamable-http
 
 # In another terminal — list tools
 curl http://localhost:8000/mcp

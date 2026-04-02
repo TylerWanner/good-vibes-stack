@@ -33,7 +33,7 @@ If two layers disagree, the source of truth wins.
 | Infrastructure mutation policy | Bounded control plane config/policy | Shell habits, tribal knowledge | Restart/stop/start permissions should be explicit, not socially implied. |
 | Approval decisions that matter after the moment | Durable app/DB/block state | Telegram messages alone | Chat can be the interface, but not the only durable record. |
 | Shared workspace contents | Explicitly mounted/shared workspace paths | Assumed local filesystem context | Shared collaboration state must be visible and intentionally mounted. |
-| Secrets and credentials | Explicit secret/config delivery mechanism for that scope | Hardcoded defaults, copied chat text | Long-term direction is scoped delivery over ambient env spread. |
+| Secrets and credentials | Explicit secret/config delivery mechanism for that scope | Hardcoded defaults, copied chat text | Current rule: workflow secrets live in Prefect blocks (no env fallback); runtime/service auth and agent/tool creds live in runtime env or agent-local env. |
 | Bootstrap/init completeness | Declared init contract + created artifacts | Human memory of setup steps | A healthy stack should be reconstructable from code and documented contracts. |
 
 ---

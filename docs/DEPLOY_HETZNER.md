@@ -242,7 +242,7 @@ Docker services restart automatically (`restart: unless-stopped` in compose). Ol
 **Logs:**
 ```bash
 docker compose logs -f prefect-worker    # flow execution
-docker compose logs -f nervous-system-api  # API + notifications
+docker compose logs -f nervous-system-api  # nervous-system API + notifications
 ```
 
 **Drain and restart worker safely:**

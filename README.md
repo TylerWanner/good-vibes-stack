@@ -30,8 +30,8 @@ Reasoning, orchestration, and execution stay cleanly separated. The agent reques
 | **Agency** | OpenClaw | Translates intent into action, routes to orchestration |
 | **Orchestration** | Prefect 3 | Reliable execution, retries, scheduling, audit trail |
 | **Second Brain** | Postgres + pgvector + Ollama/Claude | Ingest, analyze, score, and retrieve knowledge |
-| **Control** | safe-docker | Service lifecycle, ops control surface |
-| **Nervous System** | FastAPI | Inbound/outbound signals, notifications, API surface |
+| **Control** | safe-docker | Bounded container control surface |
+| **Nervous System** | FastAPI | API and signal-routing surface: inbound/outbound signals, notifications, workflow ops |
 | **Observability** | Grafana + Tempo | Traces, metrics, dashboards — what the nervous system sees |
 
 Each layer has a job. None of them do each other's job. The result is a system that's **reliable** (Prefect handles execution guarantees), **observable** (every run is traceable end-to-end), and **governable** (the agent operates through constrained surfaces, not raw host access).
@@ -54,7 +54,7 @@ An AI-powered knowledge base. Ingest URLs, tweets, YouTube videos, GitHub repos 
 - `backup-postgres` — pg_dump to S3/R2
 
 ### Control Plane (safe-docker)
-Minimal Docker Compose lifecycle API. API key auth, explicitly allowlisted operations only.
+Bounded container control surface. API key auth, explicitly allowlisted operations only.
 
 - **Safe:** `status`, `logs`, `restart`, `start`, `stop`, `up`, `down`
 - **Dangerous (require opt-in):** `recreate`, `build`
@@ -96,7 +96,9 @@ Prefect's global concurrency limits work across any Python code — flows, worke
 
 For the full architecture doctrine, see [`docs/architecture/INVARIANTS.md`](docs/architecture/INVARIANTS.md).
 
-To connect Claude Desktop or any MCP client to your second brain, see [`docs/MCP.md`](docs/MCP.md).
+For agent startup/context design and workspace token hygiene, see [`docs/architecture/AGENT_WORKSPACE_HYGIENE.md`](docs/architecture/AGENT_WORKSPACE_HYGIENE.md).
+
+To connect Claude Desktop or any MCP client to your Second Brain MCP, see [`docs/MCP.md`](docs/MCP.md).
 
 ---
 
@@ -121,13 +123,13 @@ For a full step-by-step deploy on a fresh Ubuntu VPS, see [`docs/DEPLOY_HETZNER.
 /second_brain       LLM client, content classification, analysis
 /nervous_system     FastAPI server, Telegram notifications
 /data               Postgres client, Alembic migrations
-/integrations       Source-specific fetchers (YouTube, Reddit, GitHub, Twitter)
+/integrations       Source-specific fetchers (YouTube, Reddit, GitHub, X/Twitter via fxtwitter)
 /shared             Config, secrets loaders
 /control            safe-docker client + policy
 /infra              Grafana, Tempo configs
 /scripts            Operational scripts
 /docs               Architecture specs and design decisions
-/agents/example     Example OpenClaw agent config (AGENTS.md, SOUL.md, etc.)
+/agents/example     Example OpenClaw agent config (standard file conventions, lean startup guidance)
 ```
 
 ---

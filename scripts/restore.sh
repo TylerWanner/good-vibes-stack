@@ -68,12 +68,12 @@ echo "  ✅ scrapling v2 global concurrency limit set (max 3)"
 
 echo ""
 echo "Step 6: Deploying Prefect flows..."
-docker compose exec -T second-brain-worker sh -c "cd /app/apps/second_brain && prefect deploy --all --prefect-file prefect.yaml"
+docker compose exec -T prefect-worker sh -c "cd /app && prefect deploy --all --prefect-file orchestration/prefect/prefect.yaml"
 echo "  ✅ flows deployed"
 
 echo ""
 echo "Step 7: Restarting API..."
-docker compose restart second-brain-api
+docker compose restart nervous-system-api
 echo "  ✅ API restarted"
 
 echo ""

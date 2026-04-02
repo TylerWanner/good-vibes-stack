@@ -13,10 +13,10 @@ Step-by-step guide to getting the Good Vibes Stack running from scratch.
   ollama pull qwen2.5:7b
   ollama pull nomic-embed-text
   ```
-- Telegram bot token — create via [@BotFather](https://t.me/BotFather)
+- Telegram chat ID for notifications
 - (Optional) [OpenClaw](https://docs.openclaw.ai) for agent capabilities
 - (Optional) Cloudflare R2 bucket for Postgres backups
-- (Optional) Anthropic API key for Claude-backed flows
+- (Optional) Anthropic API key for agent/runtime auth
 
 ---
 
@@ -33,15 +33,13 @@ Edit `.env` and fill in:
 | `POSTGRES_USER` | ✅ | e.g. `second_brain` |
 | `POSTGRES_PASSWORD` | ✅ | choose something strong |
 | `POSTGRES_DB` | ✅ | e.g. `second_brain` |
-| `TELEGRAM_BOT_TOKEN` | ✅ | from @BotFather |
 | `TELEGRAM_CHAT_ID` | ✅ | your Telegram user/chat ID |
-| `ANTHROPIC_API_KEY` | ❌ | only if using Claude for flows |
+| `API_SECRET_KEY` | ✅ | auth for nervous-system-api; fail closed by default |
 | `SECOND_BRAIN_LLM_PROVIDER` | ❌ | `ollama` (default) or `anthropic` |
 | `SECOND_BRAIN_LLM_MODEL` | ❌ | `qwen2.5:7b` (default) |
 | `SAFE_DOCKER_API_KEY` | ✅ | generate with `openssl rand -hex 32` |
-| `R2_ENDPOINT` | ❌ | Cloudflare R2 endpoint for backups |
-| `R2_ACCESS_KEY_ID` | ❌ | |
-| `R2_SECRET_ACCESS_KEY` | ❌ | |
+| `BACKUP_S3_BUCKET` | ❌ | backup destination bucket |
+| `BACKUP_S3_PREFIX` | ❌ | default `postgres/` |
 
 ---
 
@@ -72,7 +70,7 @@ This runs in sequence:
 
 ## Step 4 — Sync Prefect blocks (optional)
 
-If you have Readwise, Twitter, or Brave API keys, populate `.env.blocks`:
+If you have Readwise, Brave, backup, or other workflow credentials, populate `.env.blocks`:
 
 ```bash
 cp .env.blocks.example .env.blocks
@@ -80,7 +78,7 @@ cp .env.blocks.example .env.blocks
 python3 scripts/sync_blocks.py
 ```
 
-This creates/updates Prefect Secret blocks for all credentials.
+This creates/updates Prefect Secret blocks for workflow credentials. Policy: no env var fallback.
 
 ---
 
@@ -138,6 +136,16 @@ The worker runs a startup cleanup that marks orphaned RUNNING flows as CRASHED. 
 ```bash
 docker compose logs prefect-worker | grep "startup-cleanup"
 ```
+
+**Worker shutdown tuning:**
+The worker uses graceful drain semantics on SIGTERM. Two knobs control this:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PREFECT_SHUTDOWN_POLICY` | `reschedule` | `reschedule` (recommended), `cancel`, or `crash_via_kill` |
+| `WORKER_DRAIN_GRACE` | `30` | Seconds to wait for in-flight flows to exit before escalating |
+
+On slow hardware with long-running flows, increase `WORKER_DRAIN_GRACE`. Set in `.env`.
 
 **Ollama timeout:**
 Default timeout is 600s. For large models on slow hardware, increase `OLLAMA_TIMEOUT` or switch to a smaller model.

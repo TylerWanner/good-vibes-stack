@@ -20,11 +20,11 @@ from typing import Any
 import requests
 from fastmcp import FastMCP
 
-mcp = FastMCP("SecondBrain")
+mcp = FastMCP("Second Brain MCP")
 
-# Base URL — override with SECOND_BRAIN_API_URL env var
+# Base URL for the nervous-system API
 # Defaults to host.docker.internal:8001 for running outside the container
-_BASE_URL = os.environ.get("SECOND_BRAIN_API_URL", "http://host.docker.internal:8001").rstrip("/")
+_BASE_URL = os.environ.get("NERVOUS_SYSTEM_API_URL", "http://host.docker.internal:8001").rstrip("/")
 _TIMEOUT = int(os.environ.get("SECOND_BRAIN_TIMEOUT_MS", "120000")) // 1000
 
 

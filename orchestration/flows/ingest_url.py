@@ -652,7 +652,7 @@ def _notify_target(notify: dict[str, Any] | None) -> dict[str, Any]:
     # Load bot token from block
     bot_token = load_telegram_bot_token(bot=bot)
     
-    # chat_id from notify dict or env var fallback
+    # chat_id from notify dict or runtime routing config
     chat_id = notify.get("chat_id") or os.getenv("TELEGRAM_CHAT_ID")
 
     return {

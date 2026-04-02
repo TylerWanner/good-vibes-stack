@@ -11,7 +11,7 @@ planned shutdowns.
 
 Environment variables:
     PREFECT_API_URL: Prefect server URL (default: http://prefect-server:4200/api)
-    PREFECT_WORK_POOL: Work pool to scope cleanup (default: default-pool, not currently used)
+    PREFECT_WORK_POOL: Scope cleanup to this work pool (default: default-pool)
     CLEANUP_HEARTBEAT_THRESHOLD: Seconds since heartbeat before orphaned (default: 120)
     CLEANUP_STATE_AGE_THRESHOLD: Fallback seconds since state change (default: 300)
 
@@ -81,6 +81,7 @@ async def get_orphaned_runs(client: httpx.AsyncClient) -> list[dict]:
         f"{PREFECT_API_URL}/flow_runs/filter",
         json={
             "flow_runs": {"state": {"type": {"any_": ["RUNNING"]}}},
+            "work_pools": {"name": {"any_": [WORK_POOL]}},
             "limit": 200,
         },
         timeout=15,

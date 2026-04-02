@@ -1,4 +1,4 @@
-"""Seed initial watched accounts for Iggy's third brain.
+"""Seed initial watched accounts for the second brain.
 
 These are accounts already appearing in the second brain that consistently
 produce high-signal content on AI infra, agent systems, and builder topics.

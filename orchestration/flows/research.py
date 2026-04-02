@@ -96,8 +96,7 @@ def research_topic(query: str, num_sources: int = 5) -> dict[str, Any]:
     brave_key = load_brave_api_key()
     if not brave_key:
         raise RuntimeError(
-            "Brave API key missing. Set up 'brave-credentials' Prefect block "
-            "or set BRAVE_API_KEY env var."
+            "Brave API key missing. Set up 'brave-credentials' Prefect block."
         )
 
     logger.info("Starting research for: %s", query)

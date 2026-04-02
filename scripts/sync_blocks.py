@@ -42,25 +42,6 @@ def sync_blocks(env_vars: dict[str, str]) -> int:
 
     created = 0
 
-    # Twitter credentials (JSON blob)
-    twitter_keys = ["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN",
-                    "TWITTER_ACCESS_TOKEN_SECRET", "TWITTER_BEARER_TOKEN"]
-    if all(env_vars.get(k) for k in twitter_keys[:4]):  # bearer is optional
-        twitter_creds = {
-            "api_key": env_vars["TWITTER_API_KEY"],
-            "api_secret": env_vars["TWITTER_API_SECRET"],
-            "access_token": env_vars["TWITTER_ACCESS_TOKEN"],
-            "access_token_secret": env_vars["TWITTER_ACCESS_TOKEN_SECRET"],
-        }
-        if env_vars.get("TWITTER_BEARER_TOKEN"):
-            twitter_creds["bearer_token"] = env_vars["TWITTER_BEARER_TOKEN"]
-        try:
-            Secret(value=json.dumps(twitter_creds)).save("twitter-credentials", overwrite=True)
-            print("  ✓ twitter-credentials")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ twitter-credentials: {e}", file=sys.stderr)
-
     # Readwise (JSON blob)
     if env_vars.get("READWISE_API_TOKEN"):
         try:
@@ -97,9 +78,9 @@ def sync_blocks(env_vars: dict[str, str]) -> int:
             print(f"  ✗ s3-backup-credentials: {e}", file=sys.stderr)
 
     # Anthropic (JSON blob)
-    if env_vars.get("ANTHROPIC_API_KEY"):
+    if env_vars.get("WORKFLOW_ANTHROPIC_API_KEY"):
         try:
-            creds = {"api_key": env_vars["ANTHROPIC_API_KEY"]}
+            creds = {"api_key": env_vars["WORKFLOW_ANTHROPIC_API_KEY"]}
             Secret(value=json.dumps(creds)).save("anthropic-credentials", overwrite=True)
             print("  ✓ anthropic-credentials")
             created += 1

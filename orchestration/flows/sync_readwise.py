@@ -23,8 +23,7 @@ def fetch_new_readwise_documents(updated_after: str | None = None) -> list[dict[
     token = load_readwise_token()
     if not token:
         raise RuntimeError(
-            "Readwise token missing. Set up 'readwise-credentials' Prefect block "
-            "or set READWISE_API_TOKEN env var."
+            "Readwise token missing. Set up 'readwise-credentials' Prefect block."
         )
     client = ReadwiseClient(token, settings.readwise_base_url)
 

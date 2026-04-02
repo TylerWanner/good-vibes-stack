@@ -8,6 +8,7 @@ Triggered on-demand via POST /repos/check-updates?url=<github_url>
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from prefect import flow, get_run_logger, task
@@ -79,7 +80,7 @@ def check_repo_updates(url: str) -> dict[str, Any]:
         tree = fetch_repo_tree_task(canonical, metadata.get("default_branch", "main"))
         analysis = analyze_repo_task(metadata, readme, releases, changelog, tree)
         store_repo_task(canonical, metadata, analysis, releases)
-        db.update_repo(canonical, readme_text=readme[:16000], last_checked_at="now()")
+        db.update_repo(canonical, readme_text=readme[:16000], last_checked_at=datetime.now(timezone.utc))
         return {"changed": True, "update_summary": "Fresh ingest (not previously in DB)", "reanalyzed": True, "last_release": (releases[0].get("tag") if releases else None)}
 
     last_known_tag = repo.get("last_release")
@@ -183,7 +184,7 @@ def check_repo_updates(url: str) -> dict[str, Any]:
         logger.info("no meaningful changes detected")
 
     # Always advance last_checked_at
-    db.update_repo(canonical, last_checked_at="now()")
+    db.update_repo(canonical, last_checked_at=datetime.now(timezone.utc))
 
     logger.info(
         "check complete",

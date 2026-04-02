@@ -12,7 +12,7 @@ import httpx
 from prefect import flow, task, get_run_logger
 
 PREFECT_API_URL = os.getenv("PREFECT_API_URL", "http://prefect-server:4200/api")
-NERVOUS_SYSTEM_URL = os.getenv("NERVOUS_SYSTEM_URL", "http://nervous-system-api:8001")
+NERVOUS_SYSTEM_API_URL = os.getenv("NERVOUS_SYSTEM_API_URL", "http://nervous-system-api:8001")
 STALE_THRESHOLD_HOURS = int(os.getenv("STALE_RUN_THRESHOLD_HOURS", "2"))
 
 

@@ -771,10 +771,6 @@ class PostgresClient:
             session.commit()
 
     # ------------------------------------------------------------------
-    # Curator note (used by discover_content)
-    # ------------------------------------------------------------------
-
-    # ------------------------------------------------------------------
     # Skills
     # ------------------------------------------------------------------
 
@@ -854,16 +850,4 @@ class PostgresClient:
         with self._session_factory() as session:
             return [dict(r) for r in session.execute(stmt).mappings().all()]
 
-    # ------------------------------------------------------------------
-    # Curator note (used by discover_content)
-    # ------------------------------------------------------------------
 
-    def set_curator_note(self, *, url: str, curator_note: str) -> None:
-        """Set curator_note on an article by URL."""
-        with self._session_factory() as session:
-            session.execute(
-                sa.update(Article)
-                .where(Article.__table__.c.url == url)
-                .values(curator_note=curator_note)
-            )
-            session.commit()

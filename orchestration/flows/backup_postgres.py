@@ -3,15 +3,19 @@
 Runs daily at 03:00 UTC. Backs up second_brain and prefect databases.
 Sends Telegram notification on completion or failure.
 
-Environment variables:
-    BACKUP_S3_ENDPOINT_URL      — e.g. https://<id>.r2.cloudflarestorage.com (empty = AWS)
-    BACKUP_S3_ACCESS_KEY_ID
-    BACKUP_S3_SECRET_ACCESS_KEY
-    BACKUP_S3_BUCKET            — e.g. backups
-    BACKUP_S3_PREFIX            — optional prefix, default "postgres/"
-    BACKUP_RETENTION_DAYS       — default 30
-    DATABASE_URL                — postgresql://user:pass@host:port/db (for second_brain)
-    PREFECT_POSTGRES_URL        — optional, for prefect DB (if different host)
+Required Prefect Secret block:
+    s3-backup-credentials = {
+        "endpoint": "https://<id>.r2.cloudflarestorage.com",
+        "access_key_id": "...",
+        "secret_access_key": "..."
+    }
+
+Non-secret runtime config:
+    BACKUP_S3_BUCKET       — e.g. backups
+    BACKUP_S3_PREFIX       — optional prefix, default "postgres/"
+    BACKUP_RETENTION_DAYS  — default 30
+    DATABASE_URL           — postgresql://user:pass@host:port/db (for second_brain)
+    PREFECT_POSTGRES_URL   — optional, for prefect DB (if different host)
 
 Prefect Variables (UI-editable, no redeploy needed):
     backup_databases      = {"second_brain": "second_brain", "prefect": "prefect"}
@@ -40,7 +44,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _get_r2_creds() -> dict:
-    """Load R2 credentials from Prefect Secret block, falling back to env vars.
+    """Load R2 credentials from Prefect Secret block only.
 
     Block name: ``s3-backup-credentials``
     Expected JSON shape::
@@ -51,25 +55,20 @@ def _get_r2_creds() -> dict:
             "secret_access_key": "..."
         }
     """
-    import json
+    from shared.secrets import load_s3_backup_credentials
 
-    try:
-        from prefect.blocks.system import Secret
-        raw = Secret.load("s3-backup-credentials").get()
-        creds = json.loads(raw)
+    creds = load_s3_backup_credentials()
+    if not creds:
         return {
-            "endpoint_url": creds.get("endpoint"),
-            "access_key": creds.get("access_key_id"),
-            "secret_key": creds.get("secret_access_key"),
+            "endpoint_url": None,
+            "access_key": None,
+            "secret_key": None,
         }
-    except Exception:
-        pass
 
-    # Fall back to env vars (BACKUP_S3_* canonical, R2_* legacy)
     return {
-        "endpoint_url": os.getenv("BACKUP_S3_ENDPOINT") or os.getenv("R2_ENDPOINT") or None,
-        "access_key": os.getenv("BACKUP_S3_ACCESS_KEY_ID") or os.getenv("R2_ACCESS_KEY_ID"),
-        "secret_key": os.getenv("BACKUP_S3_SECRET_ACCESS_KEY") or os.getenv("R2_SECRET_ACCESS_KEY"),
+        "endpoint_url": creds.endpoint,
+        "access_key": creds.access_key_id,
+        "secret_key": creds.secret_access_key,
     }
 
 

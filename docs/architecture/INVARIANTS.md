@@ -126,10 +126,10 @@ A system should reveal where collaboration and coupling exist instead of pretend
 
 ## 7. Personality is the editable surface; OpenClaw is the engine
 
-Provision does not try to replace OpenClaw with a second agent runtime abstraction.
+The Good Vibes Stack does not try to replace OpenClaw with a second agent runtime abstraction.
 
 OpenClaw is the runtime engine.
-Provision supplies the operating environment and the human-editable personality/config artifacts around it.
+The Good Vibes Stack supplies the operating environment and the human-editable personality/config artifacts around it.
 
 The intended editable surface is narrow and legible:
 - `AGENTS.md`

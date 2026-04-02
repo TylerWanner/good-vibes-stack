@@ -5,11 +5,9 @@ Use these anywhere credentials are needed (API server, flows, etc.).
 
 To set up blocks:
     prefect block register -m prefect.blocks.system
-    # Then create via UI or:
-    # prefect block create secret/twitter-credentials --value '{"api_key": "...", ...}'
+    # Or run: python3 scripts/sync_blocks.py --env-file .env.blocks
 
 Required blocks:
-    - twitter-credentials: {api_key, api_secret, access_token, access_token_secret}
     - readwise-credentials: {api_token}
     - brave-credentials: {api_key}
     - telegram-bot-token-{bot}: plain string bot token (e.g. telegram-bot-token-default)
@@ -121,36 +119,10 @@ def _load_block(block_name: str) -> dict | None:
 
 
 @dataclass(frozen=True)
-class TwitterCredentials:
-    api_key: str
-    api_secret: str
-    access_token: str
-    access_token_secret: str
-
-
-def load_twitter_credentials() -> TwitterCredentials | None:
-    """Load Twitter credentials from Prefect block 'twitter-credentials'.
-    
-    Returns None if block not found or credentials incomplete.
-    """
-    block = _load_block("twitter-credentials")
-    if not block:
-        return None
-    
-    api_key = block.get("api_key")
-    api_secret = block.get("api_secret")
-    access_token = block.get("access_token")
-    access_token_secret = block.get("access_token_secret")
-    
-    if not all([api_key, api_secret, access_token, access_token_secret]):
-        return None
-    
-    return TwitterCredentials(
-        api_key=api_key,
-        api_secret=api_secret,
-        access_token=access_token,
-        access_token_secret=access_token_secret,
-    )
+class S3BackupCredentials:
+    endpoint: str | None
+    access_key_id: str
+    secret_access_key: str
 
 
 def load_readwise_token() -> str | None:
@@ -260,6 +232,28 @@ def load_safe_docker_api_key() -> str | None:
     if not block:
         return None
     return block.get("api_key")
+
+
+def load_s3_backup_credentials() -> S3BackupCredentials | None:
+    """Load S3/R2 backup credentials from Prefect block 's3-backup-credentials'.
+
+    Returns None if block not found or incomplete.
+    """
+    block = _load_block("s3-backup-credentials")
+    if not block:
+        return None
+
+    access_key_id = block.get("access_key_id")
+    secret_access_key = block.get("secret_access_key")
+    if not access_key_id or not secret_access_key:
+        return None
+
+    endpoint = block.get("endpoint") or None
+    return S3BackupCredentials(
+        endpoint=endpoint,
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+    )
 
 
 def resolve_telegram_target(notify: dict | None = None) -> tuple[str, str] | None:
