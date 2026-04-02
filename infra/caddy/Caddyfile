@@ -1,7 +1,7 @@
 # Caddyfile — reverse proxy for nervous-system-api
-# Replace {$DOMAIN} with your domain (set DOMAIN= in .env)
+# Set DOMAIN in .env (e.g. DOMAIN=api-gvs.reptilian.dev)
 # Caddy auto-provisions HTTPS via Let's Encrypt.
 
-{$DOMAIN} {
+{$DOMAIN:localhost} {
     reverse_proxy nervous-system-api:8001
 }
