@@ -78,7 +78,7 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
       - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
-      - API_SECRET_KEY=${API_SECRET_KEY}
+      - NERVOUS_SYSTEM_API_KEY=${NERVOUS_SYSTEM_API_KEY}
       - DO_NOT_TRACK=1
       # OpenTelemetry
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
@@ -125,6 +125,10 @@ services:
       - PIP_CACHE_DIR=/root/.cache/pip
       - DO_NOT_TRACK=1
       - PREFECT_FLOW_RUN_EXECUTE_SIGTERM_BEHAVIOR=reschedule
+      - PREFECT_WORK_POOL=${PREFECT_WORK_POOL:-default-pool}
+      - PREFECT_WORKER_NAME=${PREFECT_WORKER_NAME:-good-vibes-worker}
+      - PREFECT_SHUTDOWN_POLICY=${PREFECT_SHUTDOWN_POLICY:-reschedule}
+      - WORKER_DRAIN_GRACE=${WORKER_DRAIN_GRACE:-30}
       # OpenTelemetry
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
@@ -238,9 +242,27 @@ services:
       - tempo
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      nervous-system-api:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - production
+
 volumes:
   prefect-data:
   prefect-storage:
   tempo-data:
   grafana-data:
+  caddy-data:
+  caddy-config:
   pip-cache:

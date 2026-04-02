@@ -1,0 +1,7 @@
+# Caddyfile — reverse proxy for nervous-system-api
+# Replace {$DOMAIN} with your domain (set DOMAIN= in .env)
+# Caddy auto-provisions HTTPS via Let's Encrypt.
+
+{$DOMAIN} {
+    reverse_proxy nervous-system-api:8001
+}

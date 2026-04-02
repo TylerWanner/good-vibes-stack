@@ -19,9 +19,13 @@ RUN pip install --no-cache-dir --prefix=/install .
 FROM python:3.12.9-slim
 
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
-        postgresql-client \
+        postgresql-client-16 \
         procps \
     && rm -rf /var/lib/apt/lists/*
 

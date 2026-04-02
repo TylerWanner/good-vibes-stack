@@ -107,12 +107,12 @@ else:
 # ---------------------------------------------------------------------------
 # API Key Authentication
 # ---------------------------------------------------------------------------
-_API_KEY = os.getenv("API_SECRET_KEY", "").strip()
+_API_KEY = os.getenv("NERVOUS_SYSTEM_API_KEY", "").strip()
 _ALLOW_UNAUTHENTICATED_API = os.getenv("ALLOW_UNAUTHENTICATED_API", "").strip().lower() in {"1", "true", "yes", "on"}
 
 if not _API_KEY and not _ALLOW_UNAUTHENTICATED_API:
     raise RuntimeError(
-        "API_SECRET_KEY is required. Set ALLOW_UNAUTHENTICATED_API=true only for explicit local dev."
+        "NERVOUS_SYSTEM_API_KEY is required. Set ALLOW_UNAUTHENTICATED_API=true only for explicit local dev."
     )
 
 

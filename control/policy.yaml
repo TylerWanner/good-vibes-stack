@@ -16,6 +16,11 @@ logging:
   level: info
   format: json
 
+approval:
+  webhook_url: "${APPROVAL_WEBHOOK_URL}"
+  token_ttl_seconds: 120
+  token_ttl_max_seconds: 600
+
 # ---------------------------------------------------------------------------
 # Project policies
 #
@@ -31,25 +36,26 @@ projects:
         actions: [status, logs]  # No restart — risk of data corruption
 
       prefect-server:
-        actions: [status, logs, restart, up, down]
+        actions: [status, logs, restart]
 
       prefect-worker:
-        actions: [status, logs, restart, up, down]
+        actions: [status, logs, restart, build]
+        dangerous: true  # build requires HITL approval; up/down must be run from host terminal
 
       # Fetchers
       scrapling-fetcher:
-        actions: [status, logs, restart, up, down]
+        actions: [status, logs, restart]
 
       # API layer
       nervous-system-api:
-        actions: [status, logs, restart, up, down]
+        actions: [status, logs, restart]
 
       # Observability
       tempo:
-        actions: [status, logs, restart, up, down]
+        actions: [status, logs, restart]
 
       grafana:
-        actions: [status, logs, restart, up, down]
+        actions: [status, logs, restart]
 
       # safe-docker itself - logs only, no self-restart
       safe-docker:
