@@ -4,7 +4,7 @@ Exposes the second brain capabilities over the MCP protocol so any
 MCP-compatible client (Claude Desktop, Cursor, external agents) can
 interact with the second brain without going through OpenClaw.
 
-Mirrors the tool surface of extensions/second-brain-tools/index.ts.
+Mirrors the tool surface of agents/openclaw-extensions/second-brain-tools/index.ts.
 Talks to the nervous-system HTTP API — works inside or outside the container.
 
 Usage:

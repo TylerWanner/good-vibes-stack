@@ -3,6 +3,7 @@
 # Run from the repo root: ./init.sh
 # Safe to re-run — checks state and skips completed steps
 set -euo pipefail
+trap 'fail "Failed at line $LINENO"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -320,6 +321,45 @@ else
   echo "  Starting safe-docker..."
   docker compose up -d safe-docker
   ok "safe-docker started"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 12: Agent bot token setup
+# ---------------------------------------------------------------------------
+
+step "Agent bot tokens..."
+if [ -d "agents" ]; then
+  for agent_dir in agents/*/; do
+    agent_name="$(basename "$agent_dir")"
+    [ "$agent_name" = "openclaw-extensions" ] && continue
+    config_dir="${agent_dir}config"
+    env_file="${config_dir}/.env"
+
+    mkdir -p "$config_dir"
+
+    if [ -f "$env_file" ] && grep -q "TELEGRAM_BOT_TOKEN=" "$env_file" && \
+       [ -n "$(grep "TELEGRAM_BOT_TOKEN=" "$env_file" | cut -d= -f2)" ]; then
+      skip "${agent_name} bot token configured (${env_file})"
+      continue
+    fi
+
+    echo ""
+    warn "${agent_name} bot token not found at ${env_file}"
+    echo "  Create a Telegram bot via @BotFather and paste the token below."
+    echo "  Leave blank to skip (agent won't be able to send messages)."
+    echo ""
+    read -rp "  ${agent_name} TELEGRAM_BOT_TOKEN: " token
+    echo ""
+
+    if [ -n "$token" ]; then
+      echo "TELEGRAM_BOT_TOKEN=${token}" > "$env_file"
+      ok "${agent_name} bot token saved to ${env_file}"
+    else
+      warn "Skipping ${agent_name} — configure ${env_file} manually before starting"
+    fi
+  done
+else
+  skip "No agents/ directory"
 fi
 
 # ---------------------------------------------------------------------------
