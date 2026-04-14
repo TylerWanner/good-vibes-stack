@@ -123,5 +123,6 @@ A new agent session should be able to answer:
 - what do I own
 - what path is canonical
 - where do I go for deeper detail
+- what part of the filesystem is curated startup context vs handoff space vs project tree
 
 without loading half the workspace to find out.
