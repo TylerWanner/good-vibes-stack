@@ -6,6 +6,13 @@ Provides controlled access to container operations:
 - up, down: compose service management
 - recreate, build: dangerous compose operations (require policy opt-in)
 
+Operational note:
+- containerized compose writes are stricter than reads
+- if safe-docker runs inside Docker, compose-backed writes should see the managed
+  project mounted at the same absolute path the host uses
+- keep recreate opt-in; it is a sharper tool than restart and should not be part
+  of the default happy path
+
 API: /v1/projects/{project}/services/{service}/{action}
 Auth: X-API-Key header
 """

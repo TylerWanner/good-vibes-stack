@@ -13,7 +13,7 @@ Tested on: **Ubuntu 24.04**, Hetzner CX22 (2 vCPU, 4GB RAM) — minimum viable. 
 - A Telegram bot token — create one via [@BotFather](https://t.me/BotFather)
 - Your Telegram user ID — send `/start` to [@userinfobot](https://t.me/userinfobot) to find it
 - (Optional) Cloudflare R2 bucket for Postgres backups
-- (Optional) Anthropic API key if you want Claude-backed flows instead of Ollama
+- (Optional) Anthropic API key if you want to use Anthropic for workflows or a specific agent
 
 ---
 
@@ -70,19 +70,14 @@ Ollama runs as a systemd service and starts automatically on boot.
 
 ---
 
-## 4. Install OpenClaw
+## 4. OpenClaw posture in this stack
 
-OpenClaw is the agent harness that talks to Telegram and runs the main agent.
+The public/default posture is:
+- workflows default to Ollama
+- the example agent defaults to `openai-codex/gpt-5.4`
+- Anthropic is optional via API key
 
-```bash
-# Follow the official install instructions
-# https://docs.openclaw.ai/getting-started
-
-# Quick install (check docs for latest)
-curl -fsSL https://install.openclaw.ai | sh
-```
-
-After installing, run `openclaw setup` and connect your Telegram bot.
+If you want to run the included example agent, Docker Compose will run OpenClaw inside the stack via the `openclaw-agent` service.
 
 ---
 
@@ -133,35 +128,59 @@ R2_SECRET_ACCESS_KEY=<your-secret>
 BACKUP_S3_BUCKET=<your-bucket-name>
 ```
 
-**Optional — Claude instead of Ollama:**
+**Optional — use Anthropic for workflows:**
 ```env
 SECOND_BRAIN_LLM_PROVIDER=anthropic
-SECOND_BRAIN_ANTHROPIC_API_KEY=sk-ant-...
-SECOND_BRAIN_LLM_MODEL=claude-3-5-haiku-20241022
+SECOND_BRAIN_LLM_MODEL=claude-sonnet-4-6
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+If you want Anthropic only for the example agent, prefer setting `ANTHROPIC_API_KEY` in `agents/example/config/.env` instead of making it global.
 
 ---
 
 ## 7. Configure the Agent
 
-Each OpenClaw agent needs its Telegram bot token:
+The example agent reads root `.env` first, then `agents/example/config/.env`.
+Use the agent-local file for per-agent secrets and overrides.
 
 ```bash
-mkdir -p state/agent
-echo "TELEGRAM_BOT_TOKEN=<your-bot-token>" > state/agent/.env
+cp agents/example/config/.env.example agents/example/config/.env
+nano agents/example/config/.env
 ```
+
+Minimum agent-local config:
+```env
+TELEGRAM_BOT_TOKEN=<your-bot-token>
+```
+
+Optional per-agent override:
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+If you do nothing else, the example agent will default to `openai-codex/gpt-5.4`.
+
+Runtime storage notes:
+- the broad `.openclaw` runtime substrate lives in a named volume
+- `agents/example` is bind-mounted into the agent workspace for human-edited files
+- `shared-workspace` is a separate bind mount for explicit handoff files
 
 ---
 
 ## 8. Configure safe-docker
 
-Copy the example policy and edit it to match your service names:
+Review `control/policy.yaml` and adjust it if your service policy needs to differ.
 
-```bash
-cp control/safe_docker/policy.example.yaml control/safe_docker/policy.yaml
-```
+The default policy is already included in the repo. Treat it as the allowlist for infrastructure mutation.
 
-The default policy allows `restart`, `stop`, `start`, and `logs` on the main services. Edit as needed.
+Operational notes:
+- `restart` is the normal control-plane action
+- `build` is approval-gated for baked-image services
+- `recreate` is intentionally not enabled by default
+- if you later enable compose-backed writes from inside the safe-docker container, keep the managed project mounted at the same absolute host path inside the container
+
+See `docs/architecture/SAFE_DOCKER_RUNTIME.md` for the rationale.
 
 ---
 
@@ -191,9 +210,9 @@ This runs in sequence:
 1. **DB migrations** — creates tables, indexes, pgvector extension
 2. **Deploy flows** — registers all Prefect deployments
 3. **Concurrency limits** — sets `ollama=1`, `scrapling=3`
-4. **Telegram blocks** — creates notification blocks for each agent
+4. **Prefect blocks** — syncs workflow credentials from `.env.blocks` if present
 
-Output should end with `✅ Bootstrap complete`.
+Output should end with the stack up and healthy.
 
 ---
 

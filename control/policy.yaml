@@ -26,6 +26,11 @@ approval:
 #
 # Project key must match Docker Compose project name.
 # Update "good-vibes-stack" if your docker-compose project has a different name.
+#
+# If you run safe-docker inside Docker and allow compose-backed writes like
+# build/recreate, mount the managed project root at the same absolute host path
+# inside the container (for example `${PWD}:${PWD}`). Synthetic aliases like
+# `/project` are a footgun for compose mutations.
 # ---------------------------------------------------------------------------
 
 projects:
@@ -40,7 +45,7 @@ projects:
 
       prefect-worker:
         actions: [status, logs, restart, build]
-        dangerous: true  # build requires HITL approval; up/down must be run from host terminal
+        dangerous: true  # build requires HITL approval; recreate is intentionally not enabled by default
 
       # Fetchers
       scrapling-fetcher:
@@ -48,7 +53,8 @@ projects:
 
       # API layer
       nervous-system-api:
-        actions: [status, logs, restart]
+        actions: [status, logs, restart, build]
+        dangerous: true  # build requires HITL approval; recreate is intentionally not enabled by default
 
       # Observability
       tempo:

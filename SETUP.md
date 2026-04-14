@@ -16,7 +16,7 @@ Step-by-step guide to getting the Good Vibes Stack running from scratch.
 - Telegram chat ID for notifications
 - (Optional) [OpenClaw](https://docs.openclaw.ai) for agent capabilities
 - (Optional) Cloudflare R2 bucket for Postgres backups
-- (Optional) Anthropic API key for agent/runtime auth
+- (Optional) Anthropic API key if you want Anthropic for workflows or a specific agent
 
 ---
 
@@ -37,6 +37,8 @@ Edit `.env` and fill in:
 | `API_SECRET_KEY` | ✅ | auth for nervous-system-api; fail closed by default |
 | `SECOND_BRAIN_LLM_PROVIDER` | ❌ | `ollama` (default) or `anthropic` |
 | `SECOND_BRAIN_LLM_MODEL` | ❌ | `qwen2.5:7b` (default) |
+| `OPENCLAW_MODEL` | ❌ | `openai-codex/gpt-5.4` (default agent model) |
+| `ANTHROPIC_API_KEY` | ❌ | optional root-level Anthropic key; agent-local config can override it |
 | `SAFE_DOCKER_API_KEY` | ✅ | generate with `openssl rand -hex 32` |
 | `BACKUP_S3_BUCKET` | ❌ | backup destination bucket |
 | `BACKUP_S3_PREFIX` | ❌ | default `postgres/` |
@@ -80,6 +82,11 @@ python3 scripts/sync_blocks.py
 
 This creates/updates Prefect Secret blocks for workflow credentials. Policy: no env var fallback.
 
+Notes:
+- Workflows use Prefect blocks for provider credentials.
+- The example agent reads root `.env` first, then `agents/example/config/.env`.
+- Anthropic is optional and API-key-based.
+
 ---
 
 ## Step 5 — Verify
@@ -105,10 +112,17 @@ Check Prefect UI at `http://localhost:4200` to watch the flow run.
 
 To add an agent that can interact with your stack:
 
-1. Uncomment the `openclaw-agent` service in `docker-compose.yml`
-2. Configure `agent-config/openclaw.json` with your agent settings
+1. The `openclaw-agent` service is already defined behind the `agent` profile in `docker-compose.yml`
+2. Configure `agents/example/config/openclaw.json` with your agent settings if needed
 3. Set `OPENCLAW_GATEWAY_TOKEN` in `.env`
-4. Run `docker compose up -d openclaw-agent`
+4. Put your agent bot token in `agents/example/config/.env`
+5. Run `docker compose --profile agent up -d openclaw-agent`
+
+Notes:
+- Default agent model is `openai-codex/gpt-5.4`.
+- Anthropic is optional. If you want it for this agent only, set `ANTHROPIC_API_KEY` in `agents/example/config/.env`.
+- Root `.env` loads first; `agents/example/config/.env` loads second and wins on overlapping agent vars.
+- The agent uses a named volume for broad `.openclaw` runtime state, with explicit bind-mounted overlays for the example workspace and `shared-workspace`.
 
 See [OpenClaw docs](https://docs.openclaw.ai) for agent configuration.
 

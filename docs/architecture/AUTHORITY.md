@@ -119,7 +119,7 @@ it should not inherit broad workflow secrets.
 Lives in `.env` or agent-local config.
 - agent Telegram bot token
 - `BRAVE_API_KEY` (agent-direct search)
-- `ANTHROPIC_API_KEY` (agent runtime)
+- `ANTHROPIC_API_KEY` (optional agent runtime auth)
 - `SAFE_DOCKER_API_KEY` (agents call safe-docker directly — see seam 5 below)
 
 **Workflow secrets** — used by Prefect flows and workers. Canonical location: Prefect
@@ -149,7 +149,7 @@ Secret blocks. Source values in `.env.blocks`. No env fallback.
 Some providers span agent tools and workflows. That is normal. The mistake is treating
 one credential as sufficient for both.
 
-- **Anthropic:** workflow key → block; agent auth → agent-local or `.env`
+- **Anthropic:** optional. Workflow key → block; agent auth → agent-local or `.env`.
 - **Brave:** workflow key → block; agent key → agent-local
 - **Telegram:** agent bot token → agent-local; workflow notification token → block
 - **safe-docker:** awkward — it's both service auth and agent/tool credential. Single shared

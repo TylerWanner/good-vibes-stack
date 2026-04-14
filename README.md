@@ -60,7 +60,7 @@ Bounded container control surface. API key auth, explicitly allowlisted operatio
 - **Dangerous (require opt-in):** `recreate`, `build`
 - **Blocked by design:** `exec`, `run`
 
-The agent can operate the stack without raw host access. See: [github.com/ReptilianHQ/safe-docker](https://github.com/ReptilianHQ/safe-docker)
+The agent can operate the stack without raw host access. `restart` is the default operational tool; dangerous compose writes stay opt-in. See: [github.com/ReptilianHQ/safe-docker](https://github.com/ReptilianHQ/safe-docker)
 
 ### Orchestration (Prefect 3)
 Self-hosted Prefect server. All deployments defined in `orchestration/prefect.yaml`. Observable, retryable, scheduled.
@@ -112,6 +112,11 @@ cd good-vibes-stack
 
 `setup.sh` is an interactive walkthrough — it prompts for credentials, configures your environment, and gets the stack running. No manual `.env` editing required.
 
+Auth posture:
+- workflows default to local Ollama
+- the example OpenClaw agent defaults to `openai-codex/gpt-5.4`
+- Anthropic is optional and API-key-based
+
 For a full step-by-step deploy on a fresh Ubuntu VPS, see [`docs/DEPLOY_HETZNER.md`](docs/DEPLOY_HETZNER.md).
 
 ---
@@ -130,6 +135,7 @@ For a full step-by-step deploy on a fresh Ubuntu VPS, see [`docs/DEPLOY_HETZNER.
 /scripts            Operational scripts
 /docs               Architecture specs and design decisions
 /agents/example     Example OpenClaw agent config (standard file conventions, lean startup guidance)
+/shared-workspace   Explicit handoff space mounted into the agent workspace
 ```
 
 ---
@@ -152,7 +158,7 @@ docker compose version  # should show v2.24+ or v5+
 - **Agent harness:** [OpenClaw](https://github.com/openclaw/openclaw)
 - **Orchestration:** Prefect 3 (self-hosted)
 - **Web fetching:** Scrapling sidecar (Playwright-backed)
-- **LLM:** Ollama for flows; Claude via OpenClaw for agent reasoning
+- **LLM:** Ollama for flows by default; Codex via OpenClaw for agent reasoning by default; Anthropic optional via API key
 - **DB:** Postgres + pgvector
 - **Control:** [safe-docker](https://github.com/ReptilianHQ/safe-docker)
 - **Observability:** Grafana + Tempo

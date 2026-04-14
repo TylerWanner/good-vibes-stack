@@ -90,7 +90,19 @@ This repo prefers constrained control planes over generalized execution because 
 
 ---
 
-## 5. Ambient authority is a design smell
+## 5. Auth should be explicit, portable, and scoped to the plane that uses it
+
+Machine-local authenticated state is not a portable deployment contract.
+
+Preferred posture:
+- workflow provider credentials live in Prefect blocks
+- root runtime auth lives in `.env` when it is truly stack-wide
+- agent-specific provider auth can live in agent-local env/config and override the root default
+- the public stack should not depend on machine-local authenticated workstation state
+
+This buys reproducibility and makes it easier to explain why a stack works on one machine and another.
+
+## 6. Ambient authority is a design smell
 
 Broadly available secrets, filesystem access, and service power are not neutral conveniences.
 They are latent incidents.
@@ -111,7 +123,7 @@ A system that works only because everything can see everything is not robust. It
 
 ---
 
-## 6. Shared workspaces must be explicit and honestly named
+## 7. Shared workspaces must be explicit and honestly named
 
 Shared state is allowed.
 Implicit shared state is not.
@@ -124,7 +136,7 @@ A system should reveal where collaboration and coupling exist instead of pretend
 
 ---
 
-## 7. Personality is the editable surface; OpenClaw is the engine
+## 8. Personality is the editable surface; OpenClaw is the engine
 
 The Good Vibes Stack does not try to replace OpenClaw with a second agent runtime abstraction.
 
@@ -146,7 +158,7 @@ The point is to make agent behavior legible, reviewable, and operable.
 
 ---
 
-## 8. Scripts are bootstrap/recovery tools, not the main control plane
+## 9. Scripts are bootstrap/recovery tools, not the main control plane
 
 Scripts are allowed to exist for:
 - bootstrap
@@ -167,7 +179,7 @@ The long-term direction is always toward:
 
 ---
 
-## 9. Every complexity increase must buy down real pain
+## 10. Every complexity increase must buy down real pain
 
 This stack is opinionated because complexity is expensive.
 
@@ -184,7 +196,7 @@ We are building a system that can be reasoned about when it is tired, broken, or
 
 ---
 
-## 10. The system should become more understandable as it grows, not less
+## 11. The system should become more understandable as it grows, not less
 
 Growth is not success if the mental model decays.
 

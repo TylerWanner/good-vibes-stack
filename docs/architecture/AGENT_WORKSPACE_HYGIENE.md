@@ -94,6 +94,8 @@ Use a short index doc up front and keep deep runbooks for when real debugging st
 
 Do not delete or move duplicate-looking repos blindly.
 
+`shared-workspace/` is intentional. It is the explicit handoff mount for artifacts that should be visible to both the host and the agent without pretending they are part of the curated startup workspace.
+
 In containerized/dev-volume setups, two paths may refer to the same underlying storage in ways that are not obvious at first glance.
 
 Safer approach:
