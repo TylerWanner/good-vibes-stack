@@ -696,6 +696,7 @@ class PostgresClient:
             t.c.fit_for_us, t.c.our_notes, t.c.watched, t.c.last_release,
             t.c.last_release_at, t.c.release_notes, t.c.stars,
             t.c.ingested_at, t.c.updated_at, t.c.status, t.c.error_message,
+            t.c.readme_text, t.c.last_update_summary, t.c.last_checked_at,
         ).where(t.c.url == url)
         with self._session_factory() as session:
             row = session.execute(stmt).mappings().first()
@@ -710,6 +711,7 @@ class PostgresClient:
             t.c.fit_for_us, t.c.our_notes, t.c.watched, t.c.last_release,
             t.c.last_release_at, t.c.release_notes, t.c.stars,
             t.c.ingested_at, t.c.updated_at, t.c.status, t.c.error_message,
+            t.c.readme_text, t.c.last_update_summary, t.c.last_checked_at,
         ).where(t.c.id == repo_id)
         with self._session_factory() as session:
             row = session.execute(stmt).mappings().first()
@@ -730,6 +732,7 @@ class PostgresClient:
             t.c.fit_for_us, t.c.our_notes, t.c.watched, t.c.last_release,
             t.c.last_release_at, t.c.release_notes, t.c.stars,
             t.c.ingested_at, t.c.updated_at, t.c.status,
+            t.c.last_update_summary, t.c.last_checked_at,
         )
         if watched is not None:
             stmt = stmt.where(t.c.watched == watched)

@@ -382,6 +382,7 @@ class AsyncPostgresClient:
             t.c.purpose, t.c.stars, t.c.watched, t.c.status, t.c.ingested_at,
             t.c.architecture, t.c.key_features, t.c.stack, t.c.tradeoffs,
             t.c.fit_for_us, t.c.our_notes, t.c.last_release,
+            t.c.release_notes, t.c.last_update_summary, t.c.last_checked_at,
         ]
         stmt = sa.select(*cols)
         if watched is not None:

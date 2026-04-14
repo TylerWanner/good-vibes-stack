@@ -353,6 +353,9 @@ class RepoResponse(APIModel):
     watched: bool = Field(False, description="Whether to track releases")
     status: str | None = Field(None, description="Processing status")
     last_release: str | None = Field(None, description="Last known release tag")
+    release_notes: str | None = Field(None, description="Stored release notes or synthesized release summary")
+    last_update_summary: str | None = Field(None, description="Latest synthesized meaningful-change summary from update checks")
+    last_checked_at: _datetime | None = Field(None, description="When update checks last ran")
     ingested_at: _datetime | None = Field(None, description="When the repo was ingested")
 
 

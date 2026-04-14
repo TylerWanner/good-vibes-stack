@@ -125,7 +125,7 @@ def check_repo_updates(url: str) -> dict[str, Any]:
     new_last_release_at = new_releases[0].get("published_at") if new_releases else repo.get("last_release_at")
 
     if changed:
-        logger.info("meaningful changes detected", extra={"summary": update_summary[:200]})
+        logger.info(f"meaningful changes detected: {update_summary}")
 
         if should_reanalyze:
             logger.info("triggering full re-analysis")
@@ -186,10 +186,14 @@ def check_repo_updates(url: str) -> dict[str, Any]:
     # Always advance last_checked_at
     db.update_repo(canonical, last_checked_at=datetime.now(timezone.utc))
 
-    logger.info(
-        "check complete",
-        extra={"changed": changed, "reanalyzed": reanalyzed, "last_release": new_last_release},
-    )
+    if changed:
+        logger.info(
+            f"check complete: changed={changed} reanalyzed={reanalyzed} last_release={new_last_release} update_summary={update_summary}"
+        )
+    else:
+        logger.info(
+            f"check complete: changed={changed} reanalyzed={reanalyzed} last_release={new_last_release}"
+        )
 
     return {
         "changed": changed,
