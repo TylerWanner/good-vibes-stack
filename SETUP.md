@@ -34,7 +34,7 @@ Edit `.env` and fill in:
 | `POSTGRES_PASSWORD` | ✅ | choose something strong |
 | `POSTGRES_DB` | ✅ | e.g. `second_brain` |
 | `TELEGRAM_CHAT_ID` | ✅ | your Telegram user/chat ID |
-| `API_SECRET_KEY` | ✅ | auth for nervous-system-api; fail closed by default |
+| `NERVOUS_SYSTEM_API_KEY` | ✅ | auth for nervous-system-api; fail closed by default |
 | `SECOND_BRAIN_LLM_PROVIDER` | ❌ | `ollama` (default) or `anthropic` |
 | `SECOND_BRAIN_LLM_MODEL` | ❌ | `qwen2.5:7b` (default) |
 | `OPENCLAW_MODEL` | ❌ | `openai-codex/gpt-5.4` (default agent model) |

@@ -112,7 +112,7 @@ it should not inherit broad workflow secrets.
 ### Three domains
 
 **Service auth** — protects a service boundary. Lives in `.env`.
-- `API_SECRET_KEY` (nervous-system-api)
+- `NERVOUS_SYSTEM_API_KEY` (nervous-system-api)
 - `SAFE_DOCKER_API_KEY` (safe-docker)
 
 **Agent/tool credentials** — used directly by an OpenClaw agent as part of its tool surface.
@@ -132,7 +132,7 @@ Secret blocks. Source values in `.env.blocks`. No env fallback.
 
 | Credential | Domain | Where it lives | Consumers |
 |---|---|---|---|
-| `API_SECRET_KEY` | service auth | `.env` | nervous-system-api |
+| `NERVOUS_SYSTEM_API_KEY` | service auth | `.env` | nervous-system-api |
 | `SAFE_DOCKER_API_KEY` | service auth + agent/tool | `.env` | agents, nervous-system-api approval path, safe-docker |
 | `TELEGRAM_CHAT_ID` | routing config | `.env` | API + flows (not secret, but sensitive) |
 | `TELEGRAM_BOT_TOKEN` | agent/tool | agent config or `.env` | OpenClaw runtime |
@@ -171,7 +171,7 @@ one credential as sufficient for both.
 ### Seam 2: Agent → nervous-system-api
 
 **What crosses:** ingest requests, ops calls, flow triggers  
-**Gate:** `API_SECRET_KEY`  
+**Gate:** `NERVOUS_SYSTEM_API_KEY`  
 **Weakness:** same key across all callers; no per-caller scoping.  
 **Verdict:** acceptable. Closed Docker network; internal boundary credential.
 

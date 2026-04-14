@@ -163,7 +163,8 @@ If you do nothing else, the example agent will default to `openai-codex/gpt-5.4`
 
 Runtime storage notes:
 - the broad `.openclaw` runtime substrate lives in a named volume
-- `agents/example` is bind-mounted into the agent workspace for human-edited files
+- common durable `.openclaw` paths (`workspace`, `media`, `agents`, `memory`, `tmp`) are explicit host submounts
+- role-defining files are mounted read-only into the startup workspace
 - `shared-workspace` is a separate bind mount for explicit handoff files
 
 ---
