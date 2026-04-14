@@ -15,6 +15,20 @@
           }
         ]
       },
+      "openai-codex": {
+        "api": "openai-codex-responses",
+        "baseUrl": "https://api.openai.com/v1",
+        "models": [
+          {
+            "id": "gpt-5.4",
+            "name": "GPT-5.4",
+            "input": ["text", "image"],
+            "cost": { "input": 0, "output": 0 },
+            "contextWindow": 400000,
+            "maxTokens": 128000
+          }
+        ]
+      },
       "ollama": {
         "api": "ollama",
         "baseUrl": "${OLLAMA_BASE_URL}",

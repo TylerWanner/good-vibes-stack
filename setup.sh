@@ -103,9 +103,9 @@ prompt_secret "OPENCLAW_GATEWAY_TOKEN" \
 
 echo -e "${YELLOW}▶ LLM Provider${NC}"
 echo ""
-echo -e "${CYAN}Which LLM provider do you want to use?${NC}"
-echo "  1) ollama (local, free, requires Ollama running)"
-echo "  2) anthropic (cloud, requires API key)"
+echo -e "${CYAN}Which LLM provider do you want to use for workflows?${NC}"
+echo "  1) ollama (local, free, recommended default)"
+echo "  2) anthropic (cloud, optional, requires API key)"
 read -rp "  Choice [1]: " llm_choice
 
 if [ "$llm_choice" = "2" ]; then
@@ -113,6 +113,7 @@ if [ "$llm_choice" = "2" ]; then
   sed -i "s|^SECOND_BRAIN_LLM_MODEL=.*|SECOND_BRAIN_LLM_MODEL=claude-sonnet-4-6|" .env
   echo ""
   echo -e "${CYAN}Anthropic API key${NC}"
+  echo "  Used for workflow credentials when Anthropic is selected."
   echo -n "  ANTHROPIC_API_KEY: "
   read -rs anthropic_key
   echo ""
@@ -130,6 +131,9 @@ else
   echo "  ollama pull nomic-embed-text"
   echo ""
 fi
+
+# Default agent model is Codex unless the operator overrides it.
+sed -i "s|^OPENCLAW_MODEL=.*|OPENCLAW_MODEL=openai-codex/gpt-5.4|" .env
 
 echo -e "${YELLOW}▶ Telegram (for notifications + agent)${NC}"
 echo ""

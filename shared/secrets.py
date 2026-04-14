@@ -204,25 +204,6 @@ def load_anthropic_api_key() -> str | None:
     return block.get("api_key")
 
 
-def load_anthropic_auth_token() -> str | None:
-    """Load Claude Max OAuth access token from ~/.claude/.credentials.json.
-
-    Used as a fallback when no API key is available (e.g. credits exhausted).
-    Returns the raw accessToken string, or None if not found/unreadable.
-    """
-    import json
-    import os
-
-    path = os.path.expanduser("~/.claude/.credentials.json")
-    try:
-        with open(path) as f:
-            data = json.load(f)
-        token = data.get("claudeAiOauth", {}).get("accessToken")
-        return token or None
-    except Exception:
-        return None
-
-
 def load_safe_docker_api_key() -> str | None:
     """Load safe-docker API key from Prefect block 'safe-docker-credentials'.
     

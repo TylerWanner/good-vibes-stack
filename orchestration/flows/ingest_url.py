@@ -373,26 +373,20 @@ def check_ollama_health(llm_provider: str | None = None) -> None:
 @task(retries=2, retry_delay_seconds=3)
 def analyze_document(url: str, doc: dict[str, Any], llm_provider: str | None = None, llm_model: str | None = None) -> dict[str, Any]:
     logger = get_run_logger()
-    from shared.secrets import load_anthropic_api_key, load_anthropic_auth_token
+    from shared.secrets import load_anthropic_api_key
     settings = load_settings()
     effective_provider = llm_provider or settings.llm_provider
     effective_model = llm_model or settings.llm_model
     if llm_provider or llm_model:
         logger.info("analyze_document: using override provider=%s model=%s for %s", effective_provider, effective_model, url)
-    # Resolve Anthropic credentials: API key first, OAuth token as fallback
     anthropic_api_key = load_anthropic_api_key()
-    anthropic_auth_token = None
     if effective_provider == "anthropic" and not anthropic_api_key:
-        anthropic_auth_token = load_anthropic_auth_token()
-        if anthropic_auth_token:
-            logger.info("analyze_document: no API key found, falling back to Claude Max OAuth token")
-        else:
-            logger.warning("analyze_document: no Anthropic API key or OAuth token available")
+        logger.warning("analyze_document: Anthropic selected but no API key is available in workflow credentials")
     llm = LLMClient(
         provider=effective_provider,
         model=effective_model,
         anthropic_api_key=anthropic_api_key,
-        anthropic_auth_token=anthropic_auth_token,
+        anthropic_auth_token=None,
         ollama_base_url=settings.ollama_base_url,
         embedding_provider=settings.embedding_provider,
         embedding_model=settings.embedding_model,

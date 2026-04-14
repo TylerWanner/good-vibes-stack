@@ -154,22 +154,25 @@ services:
     build:
       context: .
       dockerfile: agents/Dockerfile.openclaw
-    user: root  # Avoid permission issues with bind-mounted state directory
+    user: root  # Keep startup ownership fixes simple when overlay mounts are present
     ports:
       - "127.0.0.1:18789:18789"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
+      - ./.env
       - ./agents/example/config/.env
     volumes:
-      - ${AGENT_OPENCLAW_STATE_DIR:-./agents/example/openclaw-data}:/home/node/.openclaw
-      - ./agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
+      # Broad runtime substrate: durable, runtime-owned state.
+      - openclaw-runtime:/home/node/.openclaw
+      # Human-managed overlays: editable workspace + explicit shared handoff path.
       - ./agents/example:/home/node/.openclaw/workspace:ro
+      - ./shared-workspace:/home/node/.openclaw/workspace/shared-workspace
+      - ./agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
       - ./:/workspace:rw
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
-      - OPENCLAW_MODEL=${OPENCLAW_MODEL:-anthropic/claude-sonnet-4-6}
+      - OPENCLAW_MODEL=${OPENCLAW_MODEL:-openai-codex/gpt-5.4}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_HOST=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - NERVOUS_SYSTEM_API_URL=http://nervous-system-api:8001
@@ -194,6 +197,9 @@ services:
       - "127.0.0.1:8004:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Compose-backed writes from inside the control-plane container need the
+      # managed project mounted at the same absolute path the host uses.
+      - ${PWD}:${PWD}
       - ./control/policy.yaml:/app/policy.yaml:ro
     environment:
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
@@ -268,3 +274,4 @@ volumes:
   caddy-data:
   caddy-config:
   pip-cache:
+  openclaw-runtime:
