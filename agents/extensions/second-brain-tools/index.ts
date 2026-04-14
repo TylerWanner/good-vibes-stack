@@ -21,7 +21,7 @@ function makeBaseUrl(raw?: string): string {
 }
 
 function getApiKey(configKey?: string): string | undefined {
-  return configKey || process.env.API_SECRET_KEY || undefined;
+  return configKey || process.env.NERVOUS_SYSTEM_API_KEY || undefined;
 }
 
 async function requestJson(
