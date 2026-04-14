@@ -85,6 +85,18 @@ This keeps the operational contract simple:
 
 ---
 
+## Backend split: inspection vs mutation
+
+The current practical split is:
+
+- **inspection/read-ish paths** can use SDK-backed or label-backed lookups
+- **mutation paths** should prefer the Compose CLI when Compose semantics matter
+- **`recreate` in particular** should be treated as a Compose CLI operation, not as a fancier container restart
+
+This is not abstract purity. It comes from the actual failure mode where SDK-backed recreate behaved differently from CLI-backed recreate.
+
+---
+
 ## What this doc is trying to prevent
 
 Three common mistakes:

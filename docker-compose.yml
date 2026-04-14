@@ -1,3 +1,33 @@
+x-openclaw-agent-env: &openclaw-agent-env
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  NERVOUS_SYSTEM_API_URL: http://nervous-system-api:8001
+  SAFE_DOCKER_URL: http://safe-docker:8080
+  SAFE_DOCKER_API_KEY: ${SAFE_DOCKER_API_KEY}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,service.namespace=good-vibes
+  OPENCLAW_CONFIG_PATH: /etc/openclaw/openclaw.json
+  TMPDIR: /home/node/.openclaw/tmp
+
+x-openclaw-agent-base: &openclaw-agent-base
+  build:
+    context: .
+    dockerfile: agents/Dockerfile.openclaw
+  user: root  # Keep startup ownership fixes simple when overlay mounts are present
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    nervous-system-api:
+      condition: service_healthy
+  profiles:
+    - agent  # Only starts with: docker compose --profile agent up
+  restart: unless-stopped
+
+# Agent compose standard in GVS:
+# - shared base runtime/env lives in the anchors above
+# - per-agent mounts stay explicit because persistence choices are real architecture
+# - one example agent ships today, but the shape should extend cleanly to more agents
 services:
   # ─── Core Infrastructure ────────────────────────────────────────────────────
   postgres:
@@ -148,46 +178,49 @@ services:
     restart: unless-stopped
 
   # ─── OpenClaw Agent ─────────────────────────────────────────────────────────
+  # Agent filesystem contract in this repo:
+  # 1. broad runtime substrate lives in the `openclaw-runtime` named volume
+  # 2. human-edited workspace files live in `./agents/example`
+  # 3. explicit handoff artifacts live in `./shared-workspace`
+  # 4. repo root is mounted separately at `/workspace` for broader project access
+  # Keep this split boring and explicit. If humans edit it often, bind mount it.
+  # If OpenClaw owns it operationally, keep it in the named volume.
+  #
   # To enable: set TELEGRAM_BOT_TOKEN in agents/example/config/.env and start with:
-  #   docker compose --profile agent up -d openclaw-agent
-  openclaw-agent:
-    build:
-      context: .
-      dockerfile: agents/Dockerfile.openclaw
-    user: root  # Keep startup ownership fixes simple when overlay mounts are present
+  #   docker compose --profile agent up -d example-agent
+  example-agent:
+    <<: *openclaw-agent-base
     ports:
       - "127.0.0.1:18789:18789"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     env_file:
       - ./.env
       - ./agents/example/config/.env
     volumes:
-      # Broad runtime substrate: durable, runtime-owned state.
+      # Standard agent layout:
+      # 1. Named runtime volume at /home/node/.openclaw
+      # 2. Explicit durable submounts (workspace/media/agents/memory/tmp)
+      # 3. Shared-workspace bind for handoff artifacts
+      # 4. Read-only config/persona overlays into the runtime workspace
+      # 5. Broader project tree mounted separately at /workspace
       - openclaw-runtime:/home/node/.openclaw
-      # Human-managed overlays: editable workspace + explicit shared handoff path.
-      - ./agents/example:/home/node/.openclaw/workspace:ro
-      - ./shared-workspace:/home/node/.openclaw/workspace/shared-workspace
+      - ./agents/example/openclaw-data/workspace:/home/node/.openclaw/workspace
+      - ./agents/example/openclaw-data/media:/home/node/.openclaw/media
+      - ./agents/example/openclaw-data/agents:/home/node/.openclaw/agents
+      - ./agents/example/openclaw-data/memory:/home/node/.openclaw/memory
+      - ./agents/example/openclaw-data/tmp:/home/node/.openclaw/tmp
+      - ./shared-workspace:/home/node/.openclaw/workspace/shared-workspace:rw
       - ./agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
+      - ./agents/example/AGENTS.md:/home/node/.openclaw/workspace/AGENTS.md:ro
+      - ./agents/example/SOUL.md:/home/node/.openclaw/workspace/SOUL.md:ro
+      - ./agents/example/IDENTITY.md:/home/node/.openclaw/workspace/IDENTITY.md:ro
+      - ./agents/example/TOOLS.md:/home/node/.openclaw/workspace/TOOLS.md:ro
+      - ./agents/example/USER.md:/home/node/.openclaw/workspace/USER.md:ro
+      - ./agents/example/HEARTBEAT.md:/home/node/.openclaw/workspace/HEARTBEAT.md:ro
       - ./:/workspace:rw
     environment:
-      - OPENCLAW_CONFIG_PATH=/etc/openclaw/openclaw.json
-      - OPENCLAW_MODEL=${OPENCLAW_MODEL:-openai-codex/gpt-5.4}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - OLLAMA_HOST=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - NERVOUS_SYSTEM_API_URL=http://nervous-system-api:8001
-      - SAFE_DOCKER_URL=http://safe-docker:8080
-      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
-      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-      - OTEL_SERVICE_NAME=openclaw-agent
-      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
-    depends_on:
-      nervous-system-api:
-        condition: service_healthy
-    profiles:
-      - agent  # Only starts with: docker compose --profile agent up
-    restart: unless-stopped
+      <<: *openclaw-agent-env
+      OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openai-codex/gpt-5.4}
+      OTEL_SERVICE_NAME: example-agent
 
   # ─── Control Plane ──────────────────────────────────────────────────────────
   safe-docker:

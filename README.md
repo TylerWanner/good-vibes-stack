@@ -116,6 +116,7 @@ Auth posture:
 - workflows default to local Ollama
 - the example OpenClaw agent defaults to `openai-codex/gpt-5.4`
 - Anthropic is optional and API-key-based
+- the repo ships one example agent today, but the compose/runtime shape is intended to scale to multiple agents
 
 For a full step-by-step deploy on a fresh Ubuntu VPS, see [`docs/DEPLOY_HETZNER.md`](docs/DEPLOY_HETZNER.md).
 
@@ -134,8 +135,8 @@ For a full step-by-step deploy on a fresh Ubuntu VPS, see [`docs/DEPLOY_HETZNER.
 /infra              Grafana, Tempo configs
 /scripts            Operational scripts
 /docs               Architecture specs and design decisions
-/agents/example     Example OpenClaw agent config (standard file conventions, lean startup guidance)
-/shared-workspace   Explicit handoff space mounted into the agent workspace
+/agents/example     Example OpenClaw agent scaffold (one concrete agent on a multi-agent-ready layout)
+/shared-workspace   Explicit handoff space mounted into agent workspaces
 ```
 
 ---

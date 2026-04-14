@@ -112,17 +112,20 @@ Check Prefect UI at `http://localhost:4200` to watch the flow run.
 
 To add an agent that can interact with your stack:
 
-1. The `openclaw-agent` service is already defined behind the `agent` profile in `docker-compose.yml`
+The repo currently ships one concrete example agent, but the compose and filesystem contract are intended to extend to multiple agents with the same shape.
+
+1. The `example-agent` service is already defined behind the `agent` profile in `docker-compose.yml`
 2. Configure `agents/example/config/openclaw.json` with your agent settings if needed
 3. Set `OPENCLAW_GATEWAY_TOKEN` in `.env`
 4. Put your agent bot token in `agents/example/config/.env`
-5. Run `docker compose --profile agent up -d openclaw-agent`
+5. Run `docker compose --profile agent up -d example-agent`
 
 Notes:
 - Default agent model is `openai-codex/gpt-5.4`.
 - Anthropic is optional. If you want it for this agent only, set `ANTHROPIC_API_KEY` in `agents/example/config/.env`.
 - Root `.env` loads first; `agents/example/config/.env` loads second and wins on overlapping agent vars.
-- The agent uses a named volume for broad `.openclaw` runtime state, with explicit bind-mounted overlays for the example workspace and `shared-workspace`.
+- The agent uses a named volume for broad `.openclaw` runtime state, plus explicit durable submounts for `workspace`, `media`, `agents`, `memory`, and `tmp`.
+- Filesystem contract: role-defining files are mounted read-only into the startup workspace, `shared-workspace` is the handoff area, and `/workspace` is the larger project tree.
 
 See [OpenClaw docs](https://docs.openclaw.ai) for agent configuration.
 

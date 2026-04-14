@@ -77,7 +77,7 @@ The public/default posture is:
 - the example agent defaults to `openai-codex/gpt-5.4`
 - Anthropic is optional via API key
 
-If you want to run the included example agent, Docker Compose will run OpenClaw inside the stack via the `openclaw-agent` service.
+If you want to run the included example agent, Docker Compose will run OpenClaw inside the stack via the `example-agent` service.
 
 ---
 
