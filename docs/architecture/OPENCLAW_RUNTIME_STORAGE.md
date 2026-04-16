@@ -17,7 +17,7 @@ The example agent now mounts:
 - `./agents/example/openclaw-data/agents` → `/home/node/.openclaw/agents`
 - `./agents/example/openclaw-data/memory` → `/home/node/.openclaw/memory`
 - `./agents/example/openclaw-data/tmp` → `/home/node/.openclaw/tmp`
-- `./shared-workspace` → `/home/node/.openclaw/workspace/shared-workspace`
+- `./shared-workspace` → `/home/node/.openclaw/shared-workspace`
 - read-only persona/config overlays into `/home/node/.openclaw/workspace`
 - repo root → `/workspace`
 
@@ -72,6 +72,8 @@ Use for:
 - explicit handoff files
 - scratch artifacts you want visible from both the host and the agent workspace
 - shared outputs that should not be mixed into the curated startup overlays or durable submounts
+
+Mount this at a sibling path like `/home/node/.openclaw/shared-workspace`, not under `/home/node/.openclaw/workspace`, to avoid overlapping nested-bind bugs on Docker Desktop.
 
 This exists so the startup workspace can stay small and role-defining while still giving the agent a visible place for shared outputs.
 

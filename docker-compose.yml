@@ -199,7 +199,7 @@ services:
       # Standard agent layout:
       # 1. Named runtime volume at /home/node/.openclaw
       # 2. Explicit durable submounts (workspace/media/agents/memory/tmp)
-      # 3. Shared-workspace bind for handoff artifacts
+      # 3. Shared-workspace bind at a sibling path (avoid overlapping nested binds)
       # 4. Read-only config/persona overlays into the runtime workspace
       # 5. Broader project tree mounted separately at /workspace
       - openclaw-runtime:/home/node/.openclaw
@@ -208,7 +208,7 @@ services:
       - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/agents:/home/node/.openclaw/agents
       - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/memory:/home/node/.openclaw/memory
       - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/tmp:/home/node/.openclaw/tmp
-      - ${HOST_PROJECT_PATH}/shared-workspace:/home/node/.openclaw/workspace/shared-workspace:rw
+      - ${HOST_PROJECT_PATH}/shared-workspace:/home/node/.openclaw/shared-workspace:rw
       - ${HOST_PROJECT_PATH}/agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
       - ${HOST_PROJECT_PATH}/agents/example/AGENTS.md:/home/node/.openclaw/workspace/AGENTS.md:ro
       - ${HOST_PROJECT_PATH}/agents/example/SOUL.md:/home/node/.openclaw/workspace/SOUL.md:ro
