@@ -3,7 +3,7 @@ server:
 
 docker:
   socket_path: "/var/run/docker.sock"
-  timeout_seconds: 15
+  timeout_seconds: 600
   log_tail_default: 100
   log_tail_max: 500
 
@@ -29,12 +29,13 @@ approval:
 #
 # If you run safe-docker inside Docker and allow compose-backed writes like
 # build/recreate, mount the managed project root at the same absolute host path
-# inside the container (for example `${PWD}:${PWD}`). Synthetic aliases like
-# `/project` are a footgun for compose mutations.
+# inside the container (for example `${HOST_PROJECT_PATH}:${HOST_PROJECT_PATH}`).
+# Synthetic aliases like `/project` are a footgun for compose mutations.
 # ---------------------------------------------------------------------------
 
 projects:
   good-vibes-stack:
+    compose_file: ${HOST_PROJECT_PATH}/docker-compose.yml
     services:
       # Core infrastructure - read only
       postgres:
@@ -44,8 +45,8 @@ projects:
         actions: [status, logs, restart]
 
       prefect-worker:
-        actions: [status, logs, restart, build]
-        dangerous: true  # build requires HITL approval; recreate is intentionally not enabled by default
+        actions: [status, logs, restart, build, recreate]
+        dangerous: true  # build/recreate require HITL approval; up/down should still be run from host terminal
 
       # Fetchers
       scrapling-fetcher:
@@ -53,8 +54,8 @@ projects:
 
       # API layer
       nervous-system-api:
-        actions: [status, logs, restart, build]
-        dangerous: true  # build requires HITL approval; recreate is intentionally not enabled by default
+        actions: [status, logs, restart, build, recreate]
+        dangerous: true
 
       # Observability
       tempo:

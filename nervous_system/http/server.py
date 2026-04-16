@@ -123,8 +123,8 @@ async def check_api_key_middleware(request: Request, call_next: Any) -> Any:
     Fail closed by default. Unauthenticated mode requires explicit
     ALLOW_UNAUTHENTICATED_API=true for local development.
     """
-    # Health endpoint is always open
-    if request.url.path == "/health":
+    # Health + internal approval notification endpoints are always open
+    if request.url.path in {"/health", "/ops/approval-notification"}:
         return await call_next(request)
     # OPTIONS for CORS preflight
     if request.method == "OPTIONS":
@@ -349,6 +349,10 @@ class RepoResponse(APIModel):
     stack: list[str] | None = Field(default_factory=list, description="Technology stack")
     tradeoffs: str | None = Field(None, description="Notable tradeoffs or limitations")
     fit_for_us: str | None = Field(None, description="Relevance assessment")
+    score_usefulness: int | None = Field(None, ge=1, le=5, description="Practical value score (1-5)")
+    score_interest: int | None = Field(None, ge=1, le=5, description="Interest/engagement score (1-5)")
+    score_pov: int | None = Field(None, ge=1, le=5, description="Strength of perspective (1-5)")
+    score_uniqueness: int | None = Field(None, ge=1, le=5, description="Novelty/uniqueness score (1-5)")
     our_notes: str | None = Field(None, description="Human-added notes")
     watched: bool = Field(False, description="Whether to track releases")
     status: str | None = Field(None, description="Processing status")
@@ -831,6 +835,49 @@ async def test_notification() -> TestNotificationResponse:
         telegram_result = f"error: {exc}"
 
     return TestNotificationResponse(telegram=telegram_result)
+
+
+@app.post("/ops/approval-notification", tags=["ops"])
+async def ops_approval_notification(request: ApprovalNotificationRequest) -> dict:
+    """Called by safe-docker webhook when a dangerous action needs human approval."""
+    import os
+    from shared.secrets import load_telegram_bot_token
+
+    expires_display = request.expires_at
+    try:
+        from datetime import datetime as _dt
+        exp = _dt.fromisoformat(request.expires_at.replace("Z", "+00:00"))
+        expires_display = exp.strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:
+        pass
+
+    caller_display = (request.caller or "unknown").strip() or "unknown"
+    msg = (
+        f"🔨 Approve {request.action}?\n"
+        f"project: {request.project}\n"
+        f"service: {request.service}\n"
+        f"caller: {caller_display}\n"
+        f"expires: {expires_display}"
+    )
+    buttons = [[{"text": "✅ Approve", "callback_data": f"safe-docker:approve:{request.approval_key}"}]]
+
+    token = load_telegram_bot_token(bot="default")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        raise HTTPException(status_code=503, detail="Telegram credentials not configured")
+
+    ok = send_telegram_message(token, chat_id, msg, buttons=buttons)
+    if not ok:
+        raise HTTPException(status_code=503, detail="Telegram send failed: approval notification not delivered")
+
+    logger.info(
+        "ops_approval_notification: sent approval request for action=%s service=%s project=%s key=%s…",
+        request.action,
+        request.service,
+        request.project,
+        request.approval_key[:8],
+    )
+    return {"status": "notified", "service": request.service, "project": request.project}
 
 
 @app.post("/sync/readwise", tags=["flows"], response_model=DispatchResponse)

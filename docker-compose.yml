@@ -224,19 +224,21 @@ services:
 
   # ─── Control Plane ──────────────────────────────────────────────────────────
   safe-docker:
-    image: ghcr.io/reptilianhq/safe-docker:0.2.1
+    image: ghcr.io/reptilianhq/safe-docker:0.4.0
     user: root  # Required to access Docker socket on macOS
     ports:
       - "127.0.0.1:8004:8080"
+    working_dir: ${HOST_PROJECT_PATH}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Compose-backed writes from inside the control-plane container need the
-      # managed project mounted at the same absolute path the host uses.
-      - ${HOST_PROJECT_PATH}:${HOST_PROJECT_PATH}
+      # Mirror the repo at its real host path so compose reads/writes share one path universe.
+      - ${HOST_PROJECT_PATH}:${HOST_PROJECT_PATH}:ro
       - ./control/policy.yaml:/app/policy.yaml:ro
     environment:
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
-    command: ["/app/safe-docker", "-config", "/app/policy.yaml"]
+      - APPROVAL_WEBHOOK_URL=${APPROVAL_WEBHOOK_URL}
+      - DOCKER_CONFIG=/tmp/.docker
+      - PWD=${HOST_PROJECT_PATH}
     read_only: true
     tmpfs:
       - /tmp
