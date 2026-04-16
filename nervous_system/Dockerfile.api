@@ -37,7 +37,6 @@ COPY integrations/__init__.py ./integrations/
 COPY integrations/telegram.py ./integrations/
 COPY integrations/ollama.py ./integrations/
 COPY integrations/github.py ./integrations/
-COPY integrations/twitter.py ./integrations/
 
 # Shared utilities
 COPY shared/ ./shared/
