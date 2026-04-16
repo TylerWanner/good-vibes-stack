@@ -327,28 +327,30 @@ class LLMClient:
         raw = self._generate(prompt)
         parsed = _extract_json(raw)
 
-        def _as_str(val: Any) -> str:
-            if isinstance(val, str):
-                return val
-            if val is None:
-                return ""
-            return str(val)
+        key_features = parsed.get("key_features")
+        if isinstance(key_features, list):
+            key_features = [str(v).strip() for v in key_features if v]
+        elif isinstance(key_features, str) and key_features.strip():
+            key_features = [key_features.strip()]
+        else:
+            key_features = []
 
-        def _as_str_list(val: Any) -> list[str]:
-            if isinstance(val, list):
-                return [str(v).strip() for v in val if v]
-            if isinstance(val, str) and val.strip():
-                return [val.strip()]
-            return []
+        stack = parsed.get("stack")
+        if isinstance(stack, list):
+            stack = [str(v).strip() for v in stack if v]
+        elif isinstance(stack, str) and stack.strip():
+            stack = [stack.strip()]
+        else:
+            stack = []
 
         return {
-            "purpose": _as_str(parsed.get("purpose")),
-            "architecture": _as_str(parsed.get("architecture")),
-            "key_features": _as_str_list(parsed.get("key_features")),
-            "stack": _as_str_list(parsed.get("stack")),
-            "tradeoffs": _as_str(parsed.get("tradeoffs")),
-            "fit_for_us": _as_str(parsed.get("fit_for_us")),
-            "release_summary": _as_str(parsed.get("release_summary")),
+            "purpose": "" if parsed.get("purpose") is None else str(parsed.get("purpose")),
+            "architecture": "" if parsed.get("architecture") is None else str(parsed.get("architecture")),
+            "key_features": key_features,
+            "stack": stack,
+            "tradeoffs": "" if parsed.get("tradeoffs") is None else str(parsed.get("tradeoffs")),
+            "fit_for_us": "" if parsed.get("fit_for_us") is None else str(parsed.get("fit_for_us")),
+            "release_summary": "" if parsed.get("release_summary") is None else str(parsed.get("release_summary")),
             "score_usefulness": _clamp_score(parsed.get("score_usefulness")),
             "score_interest": _clamp_score(parsed.get("score_interest")),
             "score_pov": _clamp_score(parsed.get("score_pov")),
@@ -410,14 +412,12 @@ class LLMClient:
         )
         raw = self._generate(prompt)
         parsed = _extract_json(raw)
-        # Model should return {"tweets": [...]} — handle all fallback shapes
-        if isinstance(parsed, list):
-            return parsed
-        for key in ("tweets", "drafts", "data", "list", "results", "items"):
-            val = parsed.get(key)
-            if isinstance(val, list) and val:
-                return val
-        return []
+
+        tweets = parsed.get("tweets")
+        if not isinstance(tweets, list):
+            raise RuntimeError(f"Model returned invalid tweet draft schema: expected object with list field 'tweets', got keys={sorted(parsed.keys())}")
+
+        return tweets
 
     def research_synthesis(self, query: str, sources: list[dict[str, Any]]) -> str:
         """Synthesize multiple fetched sources into a research report."""

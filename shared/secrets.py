@@ -21,78 +21,35 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import urllib.request
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
 
-def _load_block_raw(block_name: str) -> str | None:
-    """Load a Prefect Secret block and return its raw string value.
+def _fetch_block_value(block_name: str) -> str | dict | None:
+    """Load a Prefect Secret block value.
 
-    Returns string on success, None if block not found.
-    For JSON blocks, returns the unparsed JSON string.
-    """
-    import os
-    import urllib.request
-    import json as _json
-
-    prefect_api_url = os.environ.get("PREFECT_API_URL", "http://prefect-server:4200/api")
-
-    try:
-        url = f"{prefect_api_url}/block_documents/filter"
-        payload = _json.dumps({
-            "block_documents": {"name": {"any_": [block_name]}},
-            "include_secrets": True,
-        }).encode()
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            docs = _json.load(resp)
-
-        if not docs:
-            logger.debug("Prefect block %r not found", block_name)
-            return None
-
-        value = docs[0].get("data", {}).get("value")
-        if value is None:
-            logger.debug("Prefect block %r has no value", block_name)
-            return None
-
-        if isinstance(value, str):
-            return value
-        if isinstance(value, dict):
-            return _json.dumps(value)
-
-        logger.debug("Prefect block %r has unexpected value type: %s", block_name, type(value).__name__)
-        return None
-
-    except Exception as exc:
-        logger.debug("Failed to load Prefect block %r: %s", block_name, exc)
-        return None
-
-
-def _load_block(block_name: str) -> dict | None:
-    """Load a Prefect Secret block and parse its JSON value.
-
-    Returns parsed dict on success, None if block not found or not in a flow context.
+    Returns the raw value from Prefect (string or dict), or None if block not found.
 
     Prefect 3.x made Block.load() a coroutine. We call the Prefect API directly
     via HTTP so this works from any context (FastAPI, flow tasks, scripts) without
     fighting asyncio event loop nesting.
     """
-    import os
-    import urllib.request
-    import urllib.parse
-
     prefect_api_url = os.environ.get("PREFECT_API_URL", "http://prefect-server:4200/api")
 
     try:
-        # Fetch block document by name, including secrets
-        url = f"{prefect_api_url}/block_documents/filter"
         payload = json.dumps({
             "block_documents": {"name": {"any_": [block_name]}},
             "include_secrets": True,
         }).encode()
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+        req = urllib.request.Request(
+            f"{prefect_api_url}/block_documents/filter",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
         with urllib.request.urlopen(req, timeout=5) as resp:
             docs = json.load(resp)
 
@@ -105,17 +62,45 @@ def _load_block(block_name: str) -> dict | None:
             logger.debug("Prefect block %r has no value", block_name)
             return None
 
-        if isinstance(value, dict):
+        if isinstance(value, (str, dict)):
             return value
-        if isinstance(value, str):
-            return json.loads(value)
 
         logger.debug("Prefect block %r has unexpected value type: %s", block_name, type(value).__name__)
         return None
-
     except Exception as exc:
         logger.debug("Failed to load Prefect block %r: %s", block_name, exc)
         return None
+
+
+def _load_block_raw(block_name: str) -> str | None:
+    """Load a Prefect Secret block and return its raw string value.
+
+    Returns string on success, None if block not found.
+    For JSON blocks, returns the unparsed JSON string.
+    """
+    value = _fetch_block_value(block_name)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return None
+
+
+def _load_block(block_name: str) -> dict | None:
+    """Load a Prefect Secret block and parse its JSON value.
+
+    Returns parsed dict on success, None if block not found.
+    """
+    value = _fetch_block_value(block_name)
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:
+            logger.debug("Prefect block %r did not contain valid JSON: %s", block_name, exc)
+            return None
+    return None
 
 
 @dataclass(frozen=True)
@@ -249,8 +234,6 @@ def resolve_telegram_target(notify: dict | None = None) -> tuple[str, str] | Non
         (token, chat_id) tuple on success, None if either is missing.
         Logs errors on failure.
     """
-    import os
-
     notify = notify or {}
     bot = notify.get("bot")  # None → load_telegram_bot_token uses default (default)
     token = load_telegram_bot_token(bot=bot)

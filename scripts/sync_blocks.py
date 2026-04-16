@@ -9,16 +9,60 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
-import sys
 from pathlib import Path
+from typing import Any
+
+
+logger = logging.getLogger(__name__)
+
+BLOCKS: dict[str, dict[str, Any]] = {
+    "readwise-credentials": {
+        "env": {"api_token": "READWISE_API_TOKEN"},
+        "string": False,
+    },
+    "brave-credentials": {
+        "env": {"api_key": "BRAVE_API_KEY"},
+        "string": False,
+    },
+    "s3-backup-credentials": {
+        "env": {
+            "endpoint": "R2_ENDPOINT",
+            "access_key_id": "R2_ACCESS_KEY_ID",
+            "secret_access_key": "R2_SECRET_ACCESS_KEY",
+        },
+        "string": False,
+    },
+    "anthropic-credentials": {
+        "env": {"api_key": "WORKFLOW_ANTHROPIC_API_KEY"},
+        "string": False,
+    },
+    "telegram-bot-token-default": {
+        "env": {"_value": "TELEGRAM_BOT_TOKEN"},
+        "string": True,
+    },
+    "safe-docker-credentials": {
+        "env": {
+            "api_key": "NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY",
+            "url": "SAFE_DOCKER_URL",
+        },
+        "string": False,
+        "defaults": {"url": "http://safe-docker:8080"},
+    },
+}
+
+
+def configure_logging() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 
 def load_env_file(path: Path) -> dict[str, str]:
     """Load key=value pairs from an env file."""
-    result = {}
+    result: dict[str, str] = {}
     if not path.exists():
         return result
+
     for line in path.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -32,89 +76,59 @@ def load_env_file(path: Path) -> dict[str, str]:
     return result
 
 
+def build_payload(config: dict[str, Any], env_vars: dict[str, str]) -> tuple[str | dict[str, str] | None, list[str]]:
+    env_map: dict[str, str] = config["env"]
+    defaults: dict[str, str] = config.get("defaults", {})
+
+    if config.get("string"):
+        env_var = env_map["_value"]
+        value = env_vars.get(env_var, "")
+        return (value if value else None), ([env_var] if not value else [])
+
+    payload: dict[str, str] = {}
+    missing: list[str] = []
+
+    for field, env_var in env_map.items():
+        value = env_vars.get(env_var) or defaults.get(field)
+        if value:
+            payload[field] = value
+        else:
+            missing.append(env_var)
+
+    return (payload if not missing else None), missing
+
+
 def sync_blocks(env_vars: dict[str, str]) -> int:
     """Create/update Prefect Secret blocks from env vars."""
     try:
         from prefect.blocks.system import Secret
     except ImportError:
-        print("Error: Prefect not installed", file=sys.stderr)
+        logger.error("Prefect not installed")
         return 1
 
-    created = 0
+    synced = 0
 
-    # Readwise (JSON blob)
-    if env_vars.get("READWISE_API_TOKEN"):
+    for block_name, config in BLOCKS.items():
+        payload, missing = build_payload(config, env_vars)
+        if payload is None:
+            logger.warning("skip %s missing=%s", block_name, ", ".join(missing))
+            continue
+
         try:
-            creds = {"api_token": env_vars["READWISE_API_TOKEN"]}
-            Secret(value=json.dumps(creds)).save("readwise-credentials", overwrite=True)
-            print("  ✓ readwise-credentials")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ readwise-credentials: {e}", file=sys.stderr)
+            value = payload if config.get("string") else json.dumps(payload)
+            Secret(value=value).save(block_name, overwrite=True)
+            logger.info("ok %s", block_name)
+            synced += 1
+        except Exception:
+            logger.exception("failed to sync %s", block_name)
 
-    # Brave (JSON blob)
-    if env_vars.get("BRAVE_API_KEY"):
-        try:
-            creds = {"api_key": env_vars["BRAVE_API_KEY"]}
-            Secret(value=json.dumps(creds)).save("brave-credentials", overwrite=True)
-            print("  ✓ brave-credentials")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ brave-credentials: {e}", file=sys.stderr)
-
-    # R2 credentials (JSON blob)
-    r2_keys = ["R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]
-    if all(env_vars.get(k) for k in r2_keys):
-        try:
-            creds = {
-                "endpoint": env_vars["R2_ENDPOINT"],
-                "access_key_id": env_vars["R2_ACCESS_KEY_ID"],
-                "secret_access_key": env_vars["R2_SECRET_ACCESS_KEY"],
-            }
-            Secret(value=json.dumps(creds)).save("s3-backup-credentials", overwrite=True)
-            print("  ✓ s3-backup-credentials")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ s3-backup-credentials: {e}", file=sys.stderr)
-
-    # Anthropic (JSON blob)
-    if env_vars.get("WORKFLOW_ANTHROPIC_API_KEY"):
-        try:
-            creds = {"api_key": env_vars["WORKFLOW_ANTHROPIC_API_KEY"]}
-            Secret(value=json.dumps(creds)).save("anthropic-credentials", overwrite=True)
-            print("  ✓ anthropic-credentials")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ anthropic-credentials: {e}", file=sys.stderr)
-
-    # Telegram bot token (plain string — used by load_telegram_bot_token(bot="default"))
-    if env_vars.get("TELEGRAM_BOT_TOKEN"):
-        try:
-            Secret(value=env_vars["TELEGRAM_BOT_TOKEN"]).save("telegram-bot-token-default", overwrite=True)
-            print("  ✓ telegram-bot-token-default")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ telegram-bot-token-default: {e}", file=sys.stderr)
-
-    # nervous-system caller credential for safe-docker
-    safe_docker_key = env_vars.get("NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY")
-    if safe_docker_key:
-        try:
-            creds = {
-                "api_key": safe_docker_key,
-                "url": env_vars.get("SAFE_DOCKER_URL", "http://safe-docker:8080"),
-            }
-            Secret(value=json.dumps(creds)).save("safe-docker-credentials", overwrite=True)
-            print("  ✓ safe-docker-credentials")
-            created += 1
-        except Exception as e:
-            print(f"  ✗ safe-docker-credentials: {e}", file=sys.stderr)
-
-    print(f"\nSynced {created} blocks")
+    logger.info("synced %s block(s)", synced)
     return 0
 
 
 def main() -> int:
+    configure_logging()
+
     parser = argparse.ArgumentParser(description="Sync env vars to Prefect Secret blocks")
     parser.add_argument(
         "--env-file",
@@ -124,12 +138,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Load from file + environment (file takes precedence)
     env_vars = dict(os.environ)
     if args.env_file.exists():
         env_vars.update(load_env_file(args.env_file))
     else:
-        print(f"Note: {args.env_file} not found, using environment variables only")
+        logger.info("%s not found, using environment variables only", args.env_file)
 
     return sync_blocks(env_vars)
 
