@@ -99,6 +99,9 @@ prompt_secret "SAFE_DOCKER_AUTH_SECRET" \
 prompt_secret "NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY" \
   "caller credential used by nervous-system/plugin surfaces when calling safe-docker" \
   "openssl rand -hex 32"
+prompt_secret "NERVOUS_SYSTEM_API_KEY" \
+  "nervous-system API auth key (required unless ALLOW_UNAUTHENTICATED_API=true)" \
+  "openssl rand -hex 32"
 
 prompt_secret "OPENCLAW_GATEWAY_TOKEN" \
   "OpenClaw gateway token (for agent API auth)" \

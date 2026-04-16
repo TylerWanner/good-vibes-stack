@@ -137,6 +137,7 @@ missing_vars=""
 [ -z "${POSTGRES_DB:-}" ] && missing_vars+=" POSTGRES_DB"
 [ -z "${SAFE_DOCKER_AUTH_SECRET:-}" ] && missing_vars+=" SAFE_DOCKER_AUTH_SECRET"
 [ -z "${NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY:-}" ] && missing_vars+=" NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY"
+[ -z "${NERVOUS_SYSTEM_API_KEY:-}" ] && [ "${ALLOW_UNAUTHENTICATED_API:-false}" != "true" ] && missing_vars+=" NERVOUS_SYSTEM_API_KEY"
 [ -z "${HOST_PROJECT_PATH:-}" ] && missing_vars+=" HOST_PROJECT_PATH"
 
 if [ -n "$missing_vars" ]; then
