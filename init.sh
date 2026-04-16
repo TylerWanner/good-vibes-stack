@@ -232,10 +232,8 @@ step "Prefect worker..."
 if container_healthy prefect-worker; then
   skip "Prefect worker running"
 else
-  echo "  Building prefect-worker..."
-  docker compose build prefect-worker > /dev/null 2>&1
-  echo "  Starting prefect-worker..."
-  docker compose up -d prefect-worker
+  echo "  Building + force-recreating prefect-worker..."
+  docker compose up -d --build --force-recreate prefect-worker
   ok "Prefect worker started"
 fi
 
