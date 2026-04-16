@@ -241,6 +241,26 @@ class Repo(Base):
     tradeoffs: Mapped[str | None] = mapped_column(Text)
     our_notes: Mapped[str | None] = mapped_column(Text)
     fit_for_us: Mapped[str | None] = mapped_column(Text)
+    score_usefulness = mapped_column(
+        SmallInteger,
+        sa.CheckConstraint("score_usefulness BETWEEN 1 AND 5", name="ck_repos_score_usefulness"),
+        nullable=True,
+    )
+    score_interest = mapped_column(
+        SmallInteger,
+        sa.CheckConstraint("score_interest BETWEEN 1 AND 5", name="ck_repos_score_interest"),
+        nullable=True,
+    )
+    score_pov = mapped_column(
+        SmallInteger,
+        sa.CheckConstraint("score_pov BETWEEN 1 AND 5", name="ck_repos_score_pov"),
+        nullable=True,
+    )
+    score_uniqueness = mapped_column(
+        SmallInteger,
+        sa.CheckConstraint("score_uniqueness BETWEEN 1 AND 5", name="ck_repos_score_uniqueness"),
+        nullable=True,
+    )
     watched: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     last_release: Mapped[str | None] = mapped_column(Text)
     last_release_at = mapped_column(DateTime(timezone=True), nullable=True)
@@ -259,6 +279,8 @@ class Repo(Base):
     __table_args__ = (
         sa.Index("idx_repos_owner_name", "owner", "name"),
         sa.Index("idx_repos_watched", "watched", postgresql_where=text("watched = true")),
+        sa.Index("idx_repos_score_pov", "score_pov", postgresql_where=text("score_pov IS NOT NULL")),
+        sa.Index("idx_repos_score_uniqueness", "score_uniqueness", postgresql_where=text("score_uniqueness IS NOT NULL")),
         sa.Index(
             "idx_repos_embedding",
             text("embedding vector_cosine_ops"),
