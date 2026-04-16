@@ -497,7 +497,7 @@ async def list_articles(
     - `GET /articles?missing_embeddings=true` → processed articles missing embeddings
     """
     embedding: list[float] | None = None
-    if q:
+    if q and settings.embedding_provider == "ollama":
         try:
             from integrations.ollama import OllamaClient
             ollama = OllamaClient(settings.ollama_base_url)

@@ -114,6 +114,7 @@ read -rp "  Choice [1]: " llm_choice
 if [ "$llm_choice" = "2" ]; then
   sed -i "s|^SECOND_BRAIN_LLM_PROVIDER=.*|SECOND_BRAIN_LLM_PROVIDER=anthropic|" .env
   sed -i "s|^SECOND_BRAIN_LLM_MODEL=.*|SECOND_BRAIN_LLM_MODEL=claude-sonnet-4-6|" .env
+  sed -i "s|^#\?SECOND_BRAIN_EMBEDDING_PROVIDER=.*|SECOND_BRAIN_EMBEDDING_PROVIDER=none|" .env || true
   echo ""
   echo -e "${CYAN}Anthropic API key${NC}"
   echo "  Used for workflow credentials when Anthropic is selected."

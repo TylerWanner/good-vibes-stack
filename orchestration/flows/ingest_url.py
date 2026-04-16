@@ -522,13 +522,13 @@ def store_article(url: str, analysis: dict[str, Any]) -> None:
         score_uniqueness=analysis.get("score_uniqueness"),
         content_date=analysis.get("content_date"),
     )
-    # Generate and store embedding
+    # Generate and store embedding only when explicitly enabled.
     try:
-        from integrations.ollama import OllamaClient
         title = analysis.get("title", "") or ""
         summary = analysis.get("summary", "") or ""
         embed_text = f"{title} {summary}".strip()
-        if embed_text:
+        if settings.embedding_provider == "ollama" and embed_text:
+            from integrations.ollama import OllamaClient
             ollama = OllamaClient(settings.ollama_base_url)
             embedding = ollama.embed(embed_text)
             if embedding:

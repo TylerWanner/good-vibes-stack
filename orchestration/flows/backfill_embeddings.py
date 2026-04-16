@@ -13,7 +13,6 @@ from typing import Any
 
 from prefect import flow, task, get_run_logger
 
-from integrations.ollama import OllamaClient
 from data.postgres.client import PostgresClient
 from shared.config import load_settings
 
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @task(retries=0)
-def embed_batch(items: list[dict], db: PostgresClient, ollama: OllamaClient, table: str) -> int:
+def embed_batch(items: list[dict], db: PostgresClient, ollama: object, table: str) -> int:
     task_logger = get_run_logger()
     count = 0
     for item in items:
@@ -53,6 +52,12 @@ def backfill_embeddings(batch_size: int = 50, limit: int | None = None) -> dict:
     """
     flow_logger = get_run_logger()
     settings = load_settings()
+    if settings.embedding_provider != "ollama":
+        flow_logger.info("Embedding provider is %s; skipping backfill", settings.embedding_provider)
+        return {"articles": 0, "repos": 0, "skipped": True}
+
+    from integrations.ollama import OllamaClient
+
     db = PostgresClient(settings.database_url)
     ollama = OllamaClient(settings.ollama_base_url)
 
