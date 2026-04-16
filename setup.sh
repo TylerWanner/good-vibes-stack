@@ -142,8 +142,8 @@ else
   echo ""
 fi
 
-# Default agent model is Codex unless the operator overrides it.
-sed -i "s|^OPENCLAW_MODEL=.*|OPENCLAW_MODEL=openai-codex/gpt-5.4|" .env
+# Default agent model should match the credential we actually collect in setup.
+sed -i "s|^OPENCLAW_MODEL=.*|OPENCLAW_MODEL=anthropic/claude-sonnet-4-6|" .env
 
 echo -e "${YELLOW}▶ Telegram (for notifications + agent)${NC}"
 echo ""

@@ -74,7 +74,7 @@ Ollama runs as a systemd service and starts automatically on boot.
 
 The public/default posture is:
 - workflows default to Ollama
-- the example agent defaults to `openai-codex/gpt-5.4`
+- the example agent defaults to `anthropic/claude-sonnet-4-6`
 - Anthropic is optional via API key
 
 If you want to run the included example agent, Docker Compose will run OpenClaw inside the stack via the `example-agent` service.
@@ -160,7 +160,7 @@ Optional per-agent override:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-If you do nothing else, the example agent will default to `openai-codex/gpt-5.4`.
+If you do nothing else, the example agent will default to `anthropic/claude-sonnet-4-6`.
 
 Runtime storage notes:
 - the broad `.openclaw` runtime substrate lives in a named volume

@@ -114,7 +114,7 @@ cd good-vibes-stack
 
 Auth posture:
 - workflows default to local Ollama
-- the example OpenClaw agent defaults to `openai-codex/gpt-5.4`
+- the example OpenClaw agent defaults to `anthropic/claude-sonnet-4-6`
 - Anthropic is optional and API-key-based
 - the repo ships one example agent today, but the compose/runtime shape is intended to scale to multiple agents
 

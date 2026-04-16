@@ -219,7 +219,7 @@ services:
       - ${HOST_PROJECT_PATH}:/workspace:rw
     environment:
       <<: *openclaw-agent-env
-      OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openai-codex/gpt-5.4}
+      OPENCLAW_MODEL: ${OPENCLAW_MODEL:-anthropic/claude-sonnet-4-6}
       OTEL_SERVICE_NAME: example-agent
 
   # ─── Control Plane ──────────────────────────────────────────────────────────

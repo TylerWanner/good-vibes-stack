@@ -39,7 +39,7 @@ Edit `.env` and fill in:
 | `NERVOUS_SYSTEM_API_KEY` | ✅ | auth for nervous-system-api; fail closed by default |
 | `SECOND_BRAIN_LLM_PROVIDER` | ❌ | `ollama` (default) or `anthropic` |
 | `SECOND_BRAIN_LLM_MODEL` | ❌ | `qwen2.5:7b` (default) |
-| `OPENCLAW_MODEL` | ❌ | `openai-codex/gpt-5.4` (default agent model) |
+| `OPENCLAW_MODEL` | ❌ | `anthropic/claude-sonnet-4-6` (default agent model) |
 | `ANTHROPIC_API_KEY` | ❌ | optional root-level Anthropic key; agent-local config can override it |
 | `SAFE_DOCKER_AUTH_SECRET` | ✅ | generate with `openssl rand -hex 32` |
 | `NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY` | ✅ | caller credential used by nervous-system/plugin surfaces when calling safe-docker |
@@ -125,7 +125,7 @@ The repo currently ships one concrete example agent, but the compose and filesys
 5. Run `docker compose --profile agent up -d example-agent`
 
 Notes:
-- Default agent model is `openai-codex/gpt-5.4`.
+- Default agent model is `anthropic/claude-sonnet-4-6`.
 - Anthropic is optional. If you want it for this agent only, set `ANTHROPIC_API_KEY` in `agents/example/config/.env`.
 - Root `.env` loads first; `agents/example/config/.env` loads second and wins on overlapping agent vars.
 - The agent uses a named volume for broad `.openclaw` runtime state, plus explicit durable submounts for `workspace`, `media`, `agents`, `memory`, and `tmp`.
