@@ -120,7 +120,6 @@ Lives in `.env` or agent-local config.
 - agent Telegram bot token
 - `BRAVE_API_KEY` (agent-direct search)
 - `ANTHROPIC_API_KEY` (optional agent runtime auth)
-- `SAFE_DOCKER_API_KEY` (compatibility alias mirrored from `SAFE_DOCKER_AUTH_SECRET` while agent/tool surfaces still expect the old name)
 
 **Workflow secrets** — used by Prefect flows and workers. Canonical location: Prefect
 Secret blocks. Source values in `.env.blocks`. No env fallback.
@@ -134,7 +133,6 @@ Secret blocks. Source values in `.env.blocks`. No env fallback.
 |---|---|---|---|
 | `NERVOUS_SYSTEM_API_KEY` | service auth | `.env` | nervous-system-api |
 | `SAFE_DOCKER_AUTH_SECRET` | service auth | `.env` | safe-docker token verification |
-| `SAFE_DOCKER_API_KEY` | compatibility alias | `.env` | older agent/tool callers while migrating to caller-token auth |
 | `TELEGRAM_CHAT_ID` | routing config | `.env` | API + flows (not secret, but sensitive) |
 | `TELEGRAM_BOT_TOKEN` | agent/tool | agent config or `.env` | OpenClaw runtime |
 | `anthropic-credentials` | workflow secret | Prefect block | flows via `load_anthropic_api_key()` |
@@ -153,9 +151,9 @@ one credential as sufficient for both.
 - **Anthropic:** optional. Workflow key → block; agent auth → agent-local or `.env`.
 - **Brave:** workflow key → block; agent key → agent-local
 - **Telegram:** agent bot token → agent-local; workflow notification token → block
-- **safe-docker:** split posture. `SAFE_DOCKER_AUTH_SECRET` is the service signing secret;
-  `SAFE_DOCKER_API_KEY` remains as a compatibility alias for older agent/tool surfaces until
-  they move fully to caller-token auth.
+- **safe-docker:** `SAFE_DOCKER_AUTH_SECRET` is the canonical service signing secret.
+  Any remaining agent/tool surfaces still expecting `SAFE_DOCKER_API_KEY` should be updated,
+  not preserved via repo-level compatibility aliases.
 
 ---
 

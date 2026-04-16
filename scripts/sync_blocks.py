@@ -96,8 +96,8 @@ def sync_blocks(env_vars: dict[str, str]) -> int:
         except Exception as e:
             print(f"  ✗ telegram-bot-token-default: {e}", file=sys.stderr)
 
-    # safe-docker compatibility block (older callers still expect api_key naming)
-    safe_docker_key = env_vars.get("SAFE_DOCKER_API_KEY") or env_vars.get("SAFE_DOCKER_AUTH_SECRET")
+    # safe-docker compatibility block for any remaining callers expecting api_key naming
+    safe_docker_key = env_vars.get("SAFE_DOCKER_AUTH_SECRET")
     if safe_docker_key:
         try:
             creds = {

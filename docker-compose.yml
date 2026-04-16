@@ -11,8 +11,6 @@ x-openclaw-agent-env: &openclaw-agent-env
   OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
   NERVOUS_SYSTEM_API_URL: http://nervous-system-api:8001
   SAFE_DOCKER_URL: http://safe-docker:8080
-  # Compatibility alias: agent/tool surfaces still expect SAFE_DOCKER_API_KEY.
-  SAFE_DOCKER_API_KEY: ${SAFE_DOCKER_API_KEY}
   <<: *otel-exporter-env
   OPENCLAW_CONFIG_PATH: /etc/openclaw/openclaw.json
   TMPDIR: /home/node/.openclaw/tmp

@@ -130,21 +130,12 @@ if [ -z "${HOST_PROJECT_PATH:-}" ]; then
   ok "Saved HOST_PROJECT_PATH to .env"
 fi
 
-# Backfill safe-docker compatibility alias for agent/tool callers.
-if [ -z "${SAFE_DOCKER_API_KEY:-}" ] && [ -n "${SAFE_DOCKER_AUTH_SECRET:-}" ]; then
-  warn "SAFE_DOCKER_API_KEY not set — mirroring SAFE_DOCKER_AUTH_SECRET for compatibility"
-  printf 'SAFE_DOCKER_API_KEY=%s\n' "${SAFE_DOCKER_AUTH_SECRET}" >> .env
-  export SAFE_DOCKER_API_KEY="${SAFE_DOCKER_AUTH_SECRET}"
-  ok "Saved SAFE_DOCKER_API_KEY compatibility alias to .env"
-fi
-
 # Validate required vars
 missing_vars=""
 [ -z "${POSTGRES_PASSWORD:-}" ] && missing_vars+=" POSTGRES_PASSWORD"
 [ -z "${POSTGRES_USER:-}" ] && missing_vars+=" POSTGRES_USER"
 [ -z "${POSTGRES_DB:-}" ] && missing_vars+=" POSTGRES_DB"
 [ -z "${SAFE_DOCKER_AUTH_SECRET:-}" ] && missing_vars+=" SAFE_DOCKER_AUTH_SECRET"
-[ -z "${SAFE_DOCKER_API_KEY:-}" ] && missing_vars+=" SAFE_DOCKER_API_KEY"
 [ -z "${HOST_PROJECT_PATH:-}" ] && missing_vars+=" HOST_PROJECT_PATH"
 
 if [ -n "$missing_vars" ]; then
