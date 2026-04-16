@@ -23,7 +23,7 @@ class OllamaClient:
     def chat(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         format: str | None = None,
         temperature: float = 0.2,
@@ -34,7 +34,8 @@ class OllamaClient:
 
         Args:
             model: Model name (e.g., "llama3", "mistral")
-            messages: List of {"role": "user"|"assistant", "content": "..."}
+            messages: List of Ollama chat message dicts. For multimodal models,
+                a message may also include an ``images`` array of base64 strings.
             format: Optional output format ("json" for JSON mode)
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate

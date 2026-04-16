@@ -159,6 +159,12 @@ Return strict JSON with keys:
 - tradeoffs: 2-3 sentences. What are the real strengths and limitations?
 - fit_for_us: 1-2 sentences. How does this fit a stack running agent harnesses + workflow orchestration + FastAPI + Postgres?
 - release_summary: 1-2 sentences summarizing the latest release (if provided). Empty string if none.
+- score_usefulness: integer 1-5. How actionable/useful is this repo for a technical builder or AI infra practitioner? Use the full range; most repos should be 2-3.
+- score_interest: integer 1-5. How likely is this repo to make a technically-minded builder stop and dig in? Most repos should be 2-3.
+- score_pov: integer 1-5. Does the repo embody a strong firsthand perspective or hard-won implementation point of view? 1=commodity wrapper, 5=rare builder insight encoded in the implementation.
+- score_uniqueness: integer 1-5. How distinct is this repo relative to others in the same category? 1=commodity, 5=genuinely unusual/novel.
+
+Scoring calibration: follow the same normal-distribution bias as article scoring. Most content is 2-3. A 4 means notably above average. A 5 is rare.
 
 Be specific. Name actual features, not categories. Skip hype.
 Output JSON only. No prose outside JSON. No markdown fences.

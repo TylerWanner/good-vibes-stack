@@ -349,6 +349,10 @@ class LLMClient:
             "tradeoffs": _as_str(parsed.get("tradeoffs")),
             "fit_for_us": _as_str(parsed.get("fit_for_us")),
             "release_summary": _as_str(parsed.get("release_summary")),
+            "score_usefulness": _clamp_score(parsed.get("score_usefulness")),
+            "score_interest": _clamp_score(parsed.get("score_interest")),
+            "score_pov": _clamp_score(parsed.get("score_pov")),
+            "score_uniqueness": _clamp_score(parsed.get("score_uniqueness")),
         }
 
     def analyze_repo_update(
