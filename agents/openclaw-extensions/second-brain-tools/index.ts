@@ -16,7 +16,7 @@ type PluginContext = {
 };
 
 function makeBaseUrl(raw?: string): string {
-  const value = (raw || "http://nervous-system-api:8001").trim();
+  const value = (raw || process.env.NERVOUS_SYSTEM_API_URL || "http://nervous-system-api:8001").trim();
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
