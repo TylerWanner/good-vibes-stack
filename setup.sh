@@ -31,6 +31,9 @@ fi
 # Start with example
 cp .env.example .env
 
+# Normalize repo-root bind path immediately so compose never sees the placeholder.
+sed -i "s|^HOST_PROJECT_PATH=.*|HOST_PROJECT_PATH=${SCRIPT_DIR}|" .env
+
 # Helper to prompt with auto-generate option (masked input for secrets)
 prompt_secret() {
   local var_name="$1"

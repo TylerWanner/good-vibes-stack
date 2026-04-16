@@ -123,9 +123,13 @@ source .env
 set +a
 
 # Normalize explicit host bind roots.
-if [ -z "${HOST_PROJECT_PATH:-}" ]; then
-  warn "HOST_PROJECT_PATH not set — defaulting to ${SCRIPT_DIR}"
-  printf '\nHOST_PROJECT_PATH=%s\n' "$SCRIPT_DIR" >> .env
+if [ -z "${HOST_PROJECT_PATH:-}" ] || [ "${HOST_PROJECT_PATH}" = "/absolute/path/to/good-vibes-stack" ]; then
+  warn "HOST_PROJECT_PATH not set (or still placeholder) — defaulting to ${SCRIPT_DIR}"
+  if grep -q '^HOST_PROJECT_PATH=' .env; then
+    sed -i "s|^HOST_PROJECT_PATH=.*|HOST_PROJECT_PATH=${SCRIPT_DIR}|" .env
+  else
+    printf '\nHOST_PROJECT_PATH=%s\n' "$SCRIPT_DIR" >> .env
+  fi
   export HOST_PROJECT_PATH="$SCRIPT_DIR"
   ok "Saved HOST_PROJECT_PATH to .env"
 fi
