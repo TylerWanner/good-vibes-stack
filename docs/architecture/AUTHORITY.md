@@ -113,14 +113,14 @@ it should not inherit broad workflow secrets.
 
 **Service auth** — protects a service boundary. Lives in `.env`.
 - `NERVOUS_SYSTEM_API_KEY` (nervous-system-api)
-- `SAFE_DOCKER_API_KEY` (safe-docker)
+- `SAFE_DOCKER_AUTH_SECRET` (safe-docker signing secret)
 
 **Agent/tool credentials** — used directly by an OpenClaw agent as part of its tool surface.
 Lives in `.env` or agent-local config.
 - agent Telegram bot token
 - `BRAVE_API_KEY` (agent-direct search)
 - `ANTHROPIC_API_KEY` (optional agent runtime auth)
-- `SAFE_DOCKER_API_KEY` (agents call safe-docker directly — see seam 5 below)
+- `SAFE_DOCKER_API_KEY` (compatibility alias mirrored from `SAFE_DOCKER_AUTH_SECRET` while agent/tool surfaces still expect the old name)
 
 **Workflow secrets** — used by Prefect flows and workers. Canonical location: Prefect
 Secret blocks. Source values in `.env.blocks`. No env fallback.
@@ -133,7 +133,8 @@ Secret blocks. Source values in `.env.blocks`. No env fallback.
 | Credential | Domain | Where it lives | Consumers |
 |---|---|---|---|
 | `NERVOUS_SYSTEM_API_KEY` | service auth | `.env` | nervous-system-api |
-| `SAFE_DOCKER_API_KEY` | service auth + agent/tool | `.env` | agents, nervous-system-api approval path, safe-docker |
+| `SAFE_DOCKER_AUTH_SECRET` | service auth | `.env` | safe-docker token verification |
+| `SAFE_DOCKER_API_KEY` | compatibility alias | `.env` | older agent/tool callers while migrating to caller-token auth |
 | `TELEGRAM_CHAT_ID` | routing config | `.env` | API + flows (not secret, but sensitive) |
 | `TELEGRAM_BOT_TOKEN` | agent/tool | agent config or `.env` | OpenClaw runtime |
 | `anthropic-credentials` | workflow secret | Prefect block | flows via `load_anthropic_api_key()` |
@@ -152,8 +153,9 @@ one credential as sufficient for both.
 - **Anthropic:** optional. Workflow key → block; agent auth → agent-local or `.env`.
 - **Brave:** workflow key → block; agent key → agent-local
 - **Telegram:** agent bot token → agent-local; workflow notification token → block
-- **safe-docker:** awkward — it's both service auth and agent/tool credential. Single shared
-  key is current posture. Splittable only when safe-docker supports per-key policy scopes.
+- **safe-docker:** split posture. `SAFE_DOCKER_AUTH_SECRET` is the service signing secret;
+  `SAFE_DOCKER_API_KEY` remains as a compatibility alias for older agent/tool surfaces until
+  they move fully to caller-token auth.
 
 ---
 
@@ -191,7 +193,7 @@ talk to the API" rule is intent, not network enforcement.
 ### Seam 4: nervous-system-api / worker → safe-docker (build approval path)
 
 **What crosses:** dangerous container ops (builds) via approval webhook  
-**Gate:** `SAFE_DOCKER_API_KEY` + policy.yaml allowlist + human approval  
+**Gate:** caller token signed by `SAFE_DOCKER_AUTH_SECRET` + policy.yaml allowlist + human approval  
 **Weakness:** approval tokens are key-only, not bound to action/service/requester triplet.  
 **Verdict:** best-defended seam in the stack.
 
@@ -200,7 +202,7 @@ talk to the API" rule is intent, not network enforcement.
 ### Seam 5: Agent → safe-docker (direct, by design)
 
 **What crosses:** container lifecycle commands (status, logs, restart, up)  
-**Gate:** `SAFE_DOCKER_API_KEY` + policy.yaml allowlist  
+**Gate:** caller token signed by `SAFE_DOCKER_AUTH_SECRET` + policy.yaml allowlist  
 **Design intent:** agents call safe-docker directly. nervous-system-api is a domain service,
 not a security proxy. Routing all lifecycle calls through it adds a useless hop — same
 shared key, same policy. safe-docker is the real gate. The API is correctly absent from

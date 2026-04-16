@@ -11,6 +11,7 @@ x-openclaw-agent-env: &openclaw-agent-env
   OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
   NERVOUS_SYSTEM_API_URL: http://nervous-system-api:8001
   SAFE_DOCKER_URL: http://safe-docker:8080
+  # Compatibility alias: agent/tool surfaces still expect SAFE_DOCKER_API_KEY.
   SAFE_DOCKER_API_KEY: ${SAFE_DOCKER_API_KEY}
   <<: *otel-exporter-env
   OPENCLAW_CONFIG_PATH: /etc/openclaw/openclaw.json
@@ -235,7 +236,7 @@ services:
       - ${HOST_PROJECT_PATH}:${HOST_PROJECT_PATH}:ro
       - ./control/policy.yaml:/app/policy.yaml:ro
     environment:
-      - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}
+      - SAFE_DOCKER_AUTH_SECRET=${SAFE_DOCKER_AUTH_SECRET}
       - APPROVAL_WEBHOOK_URL=${APPROVAL_WEBHOOK_URL}
       - DOCKER_CONFIG=/tmp/.docker
       - PWD=${HOST_PROJECT_PATH}

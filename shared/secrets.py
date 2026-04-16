@@ -12,7 +12,7 @@ Required blocks:
     - brave-credentials: {api_key}
     - telegram-bot-token-{bot}: plain string bot token (e.g. telegram-bot-token-default)
     - anthropic-credentials: {api_key}
-    - safe-docker-credentials: {api_key}
+    - safe-docker-credentials: {api_key}  # compatibility block for older safe-docker callers
 
 Deprecated blocks (will be removed):
     - telegram-credentials: {bot_token, chat_id} — use telegram-bot-token-{bot} instead

@@ -112,7 +112,9 @@ POSTGRES_DB=second_brain
 TELEGRAM_BOT_TOKEN=<from-BotFather>
 TELEGRAM_CHAT_ID=<your-telegram-user-id>
 
-SAFE_DOCKER_API_KEY=<generate-a-random-key>
+SAFE_DOCKER_AUTH_SECRET=<generate-a-random-key>
+# compatibility alias for older agent/tool surfaces
+SAFE_DOCKER_API_KEY=$SAFE_DOCKER_AUTH_SECRET
 ```
 
 Generate a random API key:

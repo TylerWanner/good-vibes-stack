@@ -41,7 +41,8 @@ Edit `.env` and fill in:
 | `SECOND_BRAIN_LLM_MODEL` | ❌ | `qwen2.5:7b` (default) |
 | `OPENCLAW_MODEL` | ❌ | `openai-codex/gpt-5.4` (default agent model) |
 | `ANTHROPIC_API_KEY` | ❌ | optional root-level Anthropic key; agent-local config can override it |
-| `SAFE_DOCKER_API_KEY` | ✅ | generate with `openssl rand -hex 32` |
+| `SAFE_DOCKER_AUTH_SECRET` | ✅ | generate with `openssl rand -hex 32` |
+| `SAFE_DOCKER_API_KEY` | ⚠️ compatibility alias | mirrored from `SAFE_DOCKER_AUTH_SECRET` for older agent/tool surfaces |
 | `HOST_PROJECT_PATH` | ✅ | absolute path to this `good-vibes-stack` checkout |
 | `BACKUP_S3_BUCKET` | ❌ | backup destination bucket |
 | `BACKUP_S3_PREFIX` | ❌ | default `postgres/` |

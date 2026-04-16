@@ -93,9 +93,19 @@ prompt_secret "POSTGRES_PASSWORD" \
   "Postgres password (for the second_brain database)" \
   "openssl rand -hex 16"
 
-prompt_secret "SAFE_DOCKER_API_KEY" \
-  "safe-docker API key (authenticates container control)" \
+prompt_secret "SAFE_DOCKER_AUTH_SECRET" \
+  "safe-docker auth secret (signs/verifies container control caller tokens)" \
   "openssl rand -hex 32"
+
+# Compatibility alias for older agent/tool surfaces that still expect the old env name.
+if grep -q '^SAFE_DOCKER_AUTH_SECRET=' .env; then
+  safe_docker_secret=$(grep '^SAFE_DOCKER_AUTH_SECRET=' .env | cut -d= -f2-)
+  if grep -q '^SAFE_DOCKER_API_KEY=' .env; then
+    sed -i "s|^SAFE_DOCKER_API_KEY=.*|SAFE_DOCKER_API_KEY=${safe_docker_secret}|" .env
+  else
+    printf '\nSAFE_DOCKER_API_KEY=%s\n' "$safe_docker_secret" >> .env
+  fi
+fi
 
 prompt_secret "OPENCLAW_GATEWAY_TOKEN" \
   "OpenClaw gateway token (for agent API auth)" \

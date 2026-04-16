@@ -8,9 +8,10 @@ docker:
   log_tail_max: 500
 
 auth:
-  keys:
-    "${SAFE_DOCKER_API_KEY}":
-      label: agents
+  authorized_callers:
+    - nervous-system
+    - default
+  token_secret_env: SAFE_DOCKER_AUTH_SECRET
 
 logging:
   level: info
