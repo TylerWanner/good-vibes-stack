@@ -277,7 +277,8 @@ ok "Initialization complete"
 step "Prefect blocks..."
 if [ -f ".env.blocks" ]; then
   echo "  Syncing blocks from .env.blocks..."
-  docker compose exec -T prefect-worker sh -c "cd /app && python scripts/sync_blocks.py --env-file .env.blocks" || warn "Block sync failed"
+  # Pipe .env.blocks content via stdin so secrets never need to be on disk inside the container
+  docker compose exec -T prefect-worker sh -c "cd /app && cat > /tmp/.env.blocks.tmp && python scripts/sync_blocks.py --env-file /tmp/.env.blocks.tmp; rm -f /tmp/.env.blocks.tmp" < .env.blocks || warn "Block sync failed"
   ok "Blocks synced"
 else
   skip "No .env.blocks — skipping block sync"

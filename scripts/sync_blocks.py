@@ -36,6 +36,7 @@ BLOCKS: dict[str, dict[str, Any]] = {
     },
     "anthropic-credentials": {
         "env": {"api_key": "WORKFLOW_ANTHROPIC_API_KEY"},
+        "env_fallbacks": {"api_key": ["ANTHROPIC_API_KEY"]},
         "string": False,
     },
     "telegram-bot-token-default": {
@@ -78,6 +79,7 @@ def load_env_file(path: Path) -> dict[str, str]:
 
 def build_payload(config: dict[str, Any], env_vars: dict[str, str]) -> tuple[str | dict[str, str] | None, list[str]]:
     env_map: dict[str, str] = config["env"]
+    env_fallbacks: dict[str, list[str]] = config.get("env_fallbacks", {})
     defaults: dict[str, str] = config.get("defaults", {})
 
     if config.get("string"):
@@ -89,7 +91,14 @@ def build_payload(config: dict[str, Any], env_vars: dict[str, str]) -> tuple[str
     missing: list[str] = []
 
     for field, env_var in env_map.items():
-        value = env_vars.get(env_var) or defaults.get(field)
+        value = env_vars.get(env_var)
+        if not value:
+            for fallback in env_fallbacks.get(field, []):
+                value = env_vars.get(fallback)
+                if value:
+                    break
+       if not value:
+           value = defaults.get(field)
         if value:
             payload[field] = value
         else:
