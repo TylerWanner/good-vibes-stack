@@ -97,8 +97,8 @@ def build_payload(config: dict[str, Any], env_vars: dict[str, str]) -> tuple[str
                 value = env_vars.get(fallback)
                 if value:
                     break
-       if not value:
-           value = defaults.get(field)
+        if not value:
+            value = defaults.get(field)
         if value:
             payload[field] = value
         else:
