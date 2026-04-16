@@ -1,3 +1,6 @@
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+  
 x-otel-resource-attributes-default: &otel-resource-attributes-default deployment.environment=local,service.namespace=good-vibes
 
 x-otel-exporter-env: &otel-exporter-env
