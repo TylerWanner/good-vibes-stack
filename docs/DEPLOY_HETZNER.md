@@ -113,6 +113,7 @@ TELEGRAM_BOT_TOKEN=<from-BotFather>
 TELEGRAM_CHAT_ID=<your-telegram-user-id>
 
 SAFE_DOCKER_AUTH_SECRET=<generate-a-random-key>
+NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY=<generate-a-random-key>
 ```
 
 Generate a random API key:

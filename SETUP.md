@@ -42,6 +42,7 @@ Edit `.env` and fill in:
 | `OPENCLAW_MODEL` | ❌ | `openai-codex/gpt-5.4` (default agent model) |
 | `ANTHROPIC_API_KEY` | ❌ | optional root-level Anthropic key; agent-local config can override it |
 | `SAFE_DOCKER_AUTH_SECRET` | ✅ | generate with `openssl rand -hex 32` |
+| `NERVOUS_SYSTEM_SAFE_DOCKER_API_KEY` | ✅ | caller credential used by nervous-system/plugin surfaces when calling safe-docker |
 | `HOST_PROJECT_PATH` | ✅ | absolute path to this `good-vibes-stack` checkout |
 | `BACKUP_S3_BUCKET` | ❌ | backup destination bucket |
 | `BACKUP_S3_PREFIX` | ❌ | default `postgres/` |

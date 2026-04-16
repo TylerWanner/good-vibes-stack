@@ -12,7 +12,7 @@ Required blocks:
     - brave-credentials: {api_key}
     - telegram-bot-token-{bot}: plain string bot token (e.g. telegram-bot-token-default)
     - anthropic-credentials: {api_key}
-    - safe-docker-credentials: {api_key}  # compatibility block for older safe-docker callers
+    - safe-docker-credentials: {api_key}  # nervous-system caller credential for safe-docker
 
 Deprecated blocks (will be removed):
     - telegram-credentials: {bot_token, chat_id} — use telegram-bot-token-{bot} instead
@@ -205,8 +205,8 @@ def load_anthropic_api_key() -> str | None:
 
 
 def load_safe_docker_api_key() -> str | None:
-    """Load safe-docker API key from Prefect block 'safe-docker-credentials'.
-    
+    """Load nervous-system's safe-docker caller API key from Prefect block 'safe-docker-credentials'.
+
     Returns None if block not found.
     """
     block = _load_block("safe-docker-credentials")
