@@ -1,12 +1,18 @@
+x-otel-resource-attributes-default: &otel-resource-attributes-default deployment.environment=local,service.namespace=good-vibes
+
+x-otel-exporter-env: &otel-exporter-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  # If you override the attributes on a service, include the defaults too; overrides replace, they don't merge.
+  OTEL_RESOURCE_ATTRIBUTES: *otel-resource-attributes-default
+
 x-openclaw-agent-env: &openclaw-agent-env
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
   OLLAMA_HOST: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
   NERVOUS_SYSTEM_API_URL: http://nervous-system-api:8001
   SAFE_DOCKER_URL: http://safe-docker:8080
   SAFE_DOCKER_API_KEY: ${SAFE_DOCKER_API_KEY}
-  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
-  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,service.namespace=good-vibes
+  <<: *otel-exporter-env
   OPENCLAW_CONFIG_PATH: /etc/openclaw/openclaw.json
   TMPDIR: /home/node/.openclaw/tmp
 
@@ -99,22 +105,19 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - PREFECT_API_URL=http://prefect-server:4200/api
-      - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
-      - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
-      - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
-      - SAFE_DOCKER_URL=${SAFE_DOCKER_URL:-http://safe-docker:8080}
-      - NERVOUS_SYSTEM_API_KEY=${NERVOUS_SYSTEM_API_KEY}
-      - DO_NOT_TRACK=1
-      # OpenTelemetry
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
-      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-      - OTEL_SERVICE_NAME=nervous-system-api
-      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PREFECT_API_URL: http://prefect-server:4200/api
+      SCRAPLING_FETCHER_URL: ${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
+      SECOND_BRAIN_LLM_PROVIDER: ${SECOND_BRAIN_LLM_PROVIDER:-ollama}
+      SECOND_BRAIN_LLM_MODEL: ${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      INGEST_DOMAIN_ALLOWLIST: ${INGEST_DOMAIN_ALLOWLIST}
+      SAFE_DOCKER_URL: ${SAFE_DOCKER_URL:-http://safe-docker:8080}
+      NERVOUS_SYSTEM_API_KEY: ${NERVOUS_SYSTEM_API_KEY}
+      DO_NOT_TRACK: 1
+      <<: *otel-exporter-env
+      OTEL_SERVICE_NAME: nervous-system-api
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,35 +139,32 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - PREFECT_API_URL=http://prefect-server:4200/api
-      - SCRAPLING_FETCHER_URL=${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
-      - SECOND_BRAIN_LLM_PROVIDER=${SECOND_BRAIN_LLM_PROVIDER:-ollama}
-      - SECOND_BRAIN_LLM_MODEL=${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - INGEST_DOMAIN_ALLOWLIST=${INGEST_DOMAIN_ALLOWLIST}
-      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-backups}
-      - BACKUP_S3_PREFIX=${BACKUP_S3_PREFIX:-postgres/}
-      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - PIP_CACHE_DIR=/root/.cache/pip
-      - DO_NOT_TRACK=1
-      - PREFECT_FLOW_RUN_EXECUTE_SIGTERM_BEHAVIOR=reschedule
-      - PREFECT_WORK_POOL=${PREFECT_WORK_POOL:-default-pool}
-      - PREFECT_WORKER_NAME=${PREFECT_WORKER_NAME:-good-vibes-worker}
-      - PREFECT_SHUTDOWN_POLICY=${PREFECT_SHUTDOWN_POLICY:-reschedule}
-      - WORKER_DRAIN_GRACE=${WORKER_DRAIN_GRACE:-30}
-      # OpenTelemetry
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
-      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-      - OTEL_SERVICE_NAME=prefect-worker
-      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local,service.namespace=good-vibes
-      - PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY=true
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PREFECT_API_URL: http://prefect-server:4200/api
+      SCRAPLING_FETCHER_URL: ${SCRAPLING_FETCHER_URL:-http://scrapling-fetcher:8002}
+      SECOND_BRAIN_LLM_PROVIDER: ${SECOND_BRAIN_LLM_PROVIDER:-ollama}
+      SECOND_BRAIN_LLM_MODEL: ${SECOND_BRAIN_LLM_MODEL:-qwen2.5:7b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      INGEST_DOMAIN_ALLOWLIST: ${INGEST_DOMAIN_ALLOWLIST}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-backups}
+      BACKUP_S3_PREFIX: ${BACKUP_S3_PREFIX:-postgres/}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PIP_CACHE_DIR: /root/.cache/pip
+      DO_NOT_TRACK: 1
+      PREFECT_FLOW_RUN_EXECUTE_SIGTERM_BEHAVIOR: reschedule
+      PREFECT_WORK_POOL: ${PREFECT_WORK_POOL:-default-pool}
+      PREFECT_WORKER_NAME: ${PREFECT_WORKER_NAME:-good-vibes-worker}
+      PREFECT_SHUTDOWN_POLICY: ${PREFECT_SHUTDOWN_POLICY:-reschedule}
+      WORKER_DRAIN_GRACE: ${WORKER_DRAIN_GRACE:-30}
+      <<: *otel-exporter-env
+      OTEL_SERVICE_NAME: prefect-worker
+      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: true
     volumes:
       - prefect-storage:/prefect-storage
       - pip-cache:/root/.cache/pip
@@ -203,20 +203,20 @@ services:
       # 4. Read-only config/persona overlays into the runtime workspace
       # 5. Broader project tree mounted separately at /workspace
       - openclaw-runtime:/home/node/.openclaw
-      - ./agents/example/openclaw-data/workspace:/home/node/.openclaw/workspace
-      - ./agents/example/openclaw-data/media:/home/node/.openclaw/media
-      - ./agents/example/openclaw-data/agents:/home/node/.openclaw/agents
-      - ./agents/example/openclaw-data/memory:/home/node/.openclaw/memory
-      - ./agents/example/openclaw-data/tmp:/home/node/.openclaw/tmp
-      - ./shared-workspace:/home/node/.openclaw/workspace/shared-workspace:rw
-      - ./agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
-      - ./agents/example/AGENTS.md:/home/node/.openclaw/workspace/AGENTS.md:ro
-      - ./agents/example/SOUL.md:/home/node/.openclaw/workspace/SOUL.md:ro
-      - ./agents/example/IDENTITY.md:/home/node/.openclaw/workspace/IDENTITY.md:ro
-      - ./agents/example/TOOLS.md:/home/node/.openclaw/workspace/TOOLS.md:ro
-      - ./agents/example/USER.md:/home/node/.openclaw/workspace/USER.md:ro
-      - ./agents/example/HEARTBEAT.md:/home/node/.openclaw/workspace/HEARTBEAT.md:ro
-      - ./:/workspace:rw
+      - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/workspace:/home/node/.openclaw/workspace
+      - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/media:/home/node/.openclaw/media
+      - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/agents:/home/node/.openclaw/agents
+      - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/memory:/home/node/.openclaw/memory
+      - ${HOST_PROJECT_PATH}/agents/example/openclaw-data/tmp:/home/node/.openclaw/tmp
+      - ${HOST_PROJECT_PATH}/shared-workspace:/home/node/.openclaw/workspace/shared-workspace:rw
+      - ${HOST_PROJECT_PATH}/agents/example/config/openclaw.json:/etc/openclaw/openclaw.json:ro
+      - ${HOST_PROJECT_PATH}/agents/example/AGENTS.md:/home/node/.openclaw/workspace/AGENTS.md:ro
+      - ${HOST_PROJECT_PATH}/agents/example/SOUL.md:/home/node/.openclaw/workspace/SOUL.md:ro
+      - ${HOST_PROJECT_PATH}/agents/example/IDENTITY.md:/home/node/.openclaw/workspace/IDENTITY.md:ro
+      - ${HOST_PROJECT_PATH}/agents/example/TOOLS.md:/home/node/.openclaw/workspace/TOOLS.md:ro
+      - ${HOST_PROJECT_PATH}/agents/example/USER.md:/home/node/.openclaw/workspace/USER.md:ro
+      - ${HOST_PROJECT_PATH}/agents/example/HEARTBEAT.md:/home/node/.openclaw/workspace/HEARTBEAT.md:ro
+      - ${HOST_PROJECT_PATH}:/workspace:rw
     environment:
       <<: *openclaw-agent-env
       OPENCLAW_MODEL: ${OPENCLAW_MODEL:-openai-codex/gpt-5.4}
@@ -232,7 +232,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Compose-backed writes from inside the control-plane container need the
       # managed project mounted at the same absolute path the host uses.
-      - ${PWD}:${PWD}
+      - ${HOST_PROJECT_PATH}:${HOST_PROJECT_PATH}
       - ./control/policy.yaml:/app/policy.yaml:ro
     environment:
       - SAFE_DOCKER_API_KEY=${SAFE_DOCKER_API_KEY}

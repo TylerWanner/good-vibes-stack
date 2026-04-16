@@ -28,6 +28,8 @@ cp .env.example .env
 
 Edit `.env` and fill in:
 
+> `HOST_PROJECT_PATH` should be the absolute path to your local `good-vibes-stack` checkout. `init.sh` will backfill it if missing, but making it explicit up front is better.
+
 | Variable | Required | Notes |
 |---|---|---|
 | `POSTGRES_USER` | ✅ | e.g. `second_brain` |
@@ -40,6 +42,7 @@ Edit `.env` and fill in:
 | `OPENCLAW_MODEL` | ❌ | `openai-codex/gpt-5.4` (default agent model) |
 | `ANTHROPIC_API_KEY` | ❌ | optional root-level Anthropic key; agent-local config can override it |
 | `SAFE_DOCKER_API_KEY` | ✅ | generate with `openssl rand -hex 32` |
+| `HOST_PROJECT_PATH` | ✅ | absolute path to this `good-vibes-stack` checkout |
 | `BACKUP_S3_BUCKET` | ❌ | backup destination bucket |
 | `BACKUP_S3_PREFIX` | ❌ | default `postgres/` |
 

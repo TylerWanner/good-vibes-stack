@@ -122,12 +122,21 @@ set -a
 source .env
 set +a
 
+# Normalize explicit host bind roots.
+if [ -z "${HOST_PROJECT_PATH:-}" ]; then
+  warn "HOST_PROJECT_PATH not set — defaulting to ${SCRIPT_DIR}"
+  printf '\nHOST_PROJECT_PATH=%s\n' "$SCRIPT_DIR" >> .env
+  export HOST_PROJECT_PATH="$SCRIPT_DIR"
+  ok "Saved HOST_PROJECT_PATH to .env"
+fi
+
 # Validate required vars
 missing_vars=""
 [ -z "${POSTGRES_PASSWORD:-}" ] && missing_vars+=" POSTGRES_PASSWORD"
 [ -z "${POSTGRES_USER:-}" ] && missing_vars+=" POSTGRES_USER"
 [ -z "${POSTGRES_DB:-}" ] && missing_vars+=" POSTGRES_DB"
 [ -z "${SAFE_DOCKER_API_KEY:-}" ] && missing_vars+=" SAFE_DOCKER_API_KEY"
+[ -z "${HOST_PROJECT_PATH:-}" ] && missing_vars+=" HOST_PROJECT_PATH"
 
 if [ -n "$missing_vars" ]; then
   fail "Missing required env vars:$missing_vars — run ./setup.sh"
