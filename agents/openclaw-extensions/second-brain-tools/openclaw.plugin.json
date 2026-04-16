@@ -10,6 +10,9 @@
       "baseUrl": {
         "type": "string"
       },
+      "apiKey": {
+        "type": "string"
+      },
       "timeoutMs": {
         "type": "integer",
         "minimum": 1000,
@@ -20,7 +23,10 @@
   "uiHints": {
     "baseUrl": {
       "label": "Second Brain API URL",
-      "placeholder": "http://host.docker.internal:8001"
+      "placeholder": "http://nervous-system-api:8001"
+    },
+    "apiKey": {
+      "label": "Second Brain API Key"
     },
     "timeoutMs": {
       "label": "HTTP timeout (ms)"

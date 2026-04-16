@@ -79,7 +79,8 @@
       "second-brain-tools": {
         "enabled": true,
         "config": {
-          "baseUrl": "${NERVOUS_SYSTEM_API_URL}"
+          "baseUrl": "${NERVOUS_SYSTEM_API_URL}",
+          "apiKey": "${NERVOUS_SYSTEM_API_KEY}"
         }
       },
       "diagnostics-otel": {
