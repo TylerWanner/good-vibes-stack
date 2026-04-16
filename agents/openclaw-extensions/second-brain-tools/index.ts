@@ -1,3 +1,10 @@
+type InboundMessageCtx = {
+  messageId?: string | null;
+  chatId?: string | null;
+  channel?: string | null;
+  agentName?: string | null;
+};
+
 type PluginContext = {
   config?: {
     baseUrl?: string;
@@ -10,7 +17,7 @@ type PluginContext = {
     parameters?: object;
     input_schema?: object;
     inputSchema?: object;
-    execute?: (_id: string, args: Record<string, unknown>) => Promise<unknown>;
+    execute?: (_id: string, args: Record<string, unknown>, signal?: AbortSignal, onUpdate?: unknown, inboundMessageCtx?: InboundMessageCtx) => Promise<unknown>;
     handler?: (args: Record<string, unknown>) => Promise<unknown>;
   }) => void;
 };
@@ -69,17 +76,6 @@ export default function secondBrainTools(context: PluginContext): void {
       properties: {
         url: { type: "string", description: "URL to ingest" },
         force: { type: "boolean", description: "Force re-ingest even if URL already exists", default: false },
-        notify: {
-          type: "object",
-          description: "Optional notification routing envelope for async completion messages",
-          properties: {
-            bot: { type: "string", description: "Bot name for notifications" },
-            channel: { type: "string" },
-            account_id: { type: "string" },
-            chat_id: { type: "string" },
-            reply_to_message_id: { type: "string" }
-          }
-        }
       },
       required: ["url"]
     },
@@ -88,17 +84,6 @@ export default function secondBrainTools(context: PluginContext): void {
       properties: {
         url: { type: "string", description: "URL to ingest" },
         force: { type: "boolean", description: "Force re-ingest even if URL already exists", default: false },
-        notify: {
-          type: "object",
-          description: "Optional notification routing envelope for async completion messages",
-          properties: {
-            bot: { type: "string", description: "Bot name for notifications" },
-            channel: { type: "string" },
-            account_id: { type: "string" },
-            chat_id: { type: "string" },
-            reply_to_message_id: { type: "string" }
-          }
-        }
       },
       required: ["url"]
     },
@@ -107,43 +92,29 @@ export default function secondBrainTools(context: PluginContext): void {
       properties: {
         url: { type: "string", description: "URL to ingest" },
         force: { type: "boolean", description: "Force re-ingest even if URL already exists", default: false },
-        notify: {
-          type: "object",
-          description: "Optional notification routing envelope for async completion messages",
-          properties: {
-            bot: { type: "string", description: "Bot name for notifications" },
-            channel: { type: "string" },
-            account_id: { type: "string" },
-            chat_id: { type: "string" },
-            reply_to_message_id: { type: "string" }
-          }
-        }
       },
       required: ["url"]
     },
-    execute: async (_id, args) => {
+    execute: async (_id, args, _signal, _onUpdate, inboundMessageCtx) => {
       const url = String(args.url || "");
       const force = args.force === true;
-      const notifyArg = (args.notify && typeof args.notify === "object") ? args.notify as Record<string, unknown> : {};
-      // Agent name from explicit arg or AGENT_NAME env var
-      const botValue = typeof notifyArg.bot === "string" 
-        ? notifyArg.bot 
-        : (process.env.AGENT_NAME || undefined);
-      const notify = {
-        bot: botValue,
-        channel: typeof notifyArg.channel === "string" ? notifyArg.channel : undefined,
-        account_id: typeof notifyArg.account_id === "string" ? notifyArg.account_id : undefined,
-        chat_id: typeof notifyArg.chat_id === "string" ? notifyArg.chat_id : undefined,
-        reply_to_message_id: typeof notifyArg.reply_to_message_id === "string" ? notifyArg.reply_to_message_id : undefined,
-      };
       const endpoint = new URL("/ingest", baseUrl);
+
+      const notify = {
+        agent_name: inboundMessageCtx?.agentName || null,
+        channel: inboundMessageCtx?.channel || null,
+        chat_id: inboundMessageCtx?.chatId || null,
+        reply_to_message_id: inboundMessageCtx?.messageId || null,
+      };
+
+      const body: Record<string, unknown> = { url, force, notify };
 
       const payload = await requestJson(
         endpoint.toString(),
         {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
-          body: JSON.stringify({ url, force, notify }),
+          body: JSON.stringify(body),
         },
         timeoutMs,
       );
