@@ -16,7 +16,7 @@ type PluginContext = {
 };
 
 function makeBaseUrl(raw?: string): string {
-  const value = (raw || "http://host.docker.internal:8001").trim();
+  const value = (raw || "http://nervous-system-api:8001").trim();
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
