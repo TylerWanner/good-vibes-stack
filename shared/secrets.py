@@ -72,7 +72,7 @@ def _fetch_block_value(block_name: str) -> str | dict | None:
         return None
 
 
-def _load_block_raw(block_name: str) -> str | None:
+def _load_string_block(block_name: str) -> str | None:
     """Load a Prefect Secret block and return its raw string value.
 
     Returns string on success, None if block not found.
@@ -86,7 +86,7 @@ def _load_block_raw(block_name: str) -> str | None:
     return None
 
 
-def _load_block(block_name: str) -> dict | None:
+def _load_json_block(block_name: str) -> dict | None:
     """Load a Prefect Secret block and parse its JSON value.
 
     Returns parsed dict on success, None if block not found.
@@ -103,6 +103,12 @@ def _load_block(block_name: str) -> dict | None:
     return None
 
 
+def _load_field_from_json_block(block_name: str, field: str) -> str | None:
+    """Load a single string field from a JSON Prefect Secret block."""
+    block = _load_json_block(block_name)
+    return block.get(field) if block else None
+
+
 @dataclass(frozen=True)
 class S3BackupCredentials:
     endpoint: str | None
@@ -111,25 +117,11 @@ class S3BackupCredentials:
 
 
 def load_readwise_token() -> str | None:
-    """Load Readwise API token from Prefect block 'readwise-credentials'.
-    
-    Returns None if block not found.
-    """
-    block = _load_block("readwise-credentials")
-    if not block:
-        return None
-    return block.get("api_token")
+    return _load_field_from_json_block("readwise-credentials", "api_token")
 
 
 def load_brave_api_key() -> str | None:
-    """Load Brave Search API key from Prefect block 'brave-credentials'.
-    
-    Returns None if block not found.
-    """
-    block = _load_block("brave-credentials")
-    if not block:
-        return None
-    return block.get("api_key")
+    return _load_field_from_json_block("brave-credentials", "api_key")
 
 
 def load_telegram_bot_token(bot: str | None = "default") -> str | None:
@@ -144,7 +136,7 @@ def load_telegram_bot_token(bot: str | None = "default") -> str | None:
         bot = "default"
     if bot == "default":
         logger.warning("load_telegram_bot_token: bot not specified, using default 'default' — pass bot explicitly")
-    token = _load_block_raw(f"telegram-bot-token-{bot}")
+    token = _load_string_block(f"telegram-bot-token-{bot}")
     if token is None:
         logger.error("telegram-bot-token-%s block not found", bot)
     return token
@@ -165,7 +157,7 @@ def load_telegram_credentials() -> TelegramCredentials | None:
     Returns None if block not found or credentials incomplete.
     """
     logger.warning("load_telegram_credentials() is deprecated — use load_telegram_bot_token()")
-    block = _load_block("telegram-credentials")
+    block = _load_json_block("telegram-credentials")
     if not block:
         return None
     
@@ -179,25 +171,11 @@ def load_telegram_credentials() -> TelegramCredentials | None:
 
 
 def load_anthropic_api_key() -> str | None:
-    """Load Anthropic API key from Prefect block 'anthropic-credentials'.
-
-    Returns None if block not found.
-    """
-    block = _load_block("anthropic-credentials")
-    if not block:
-        return None
-    return block.get("api_key")
+    return _load_field_from_json_block("anthropic-credentials", "api_key")
 
 
 def load_safe_docker_api_key() -> str | None:
-    """Load nervous-system's safe-docker caller API key from Prefect block 'safe-docker-credentials'.
-
-    Returns None if block not found.
-    """
-    block = _load_block("safe-docker-credentials")
-    if not block:
-        return None
-    return block.get("api_key")
+    return _load_field_from_json_block("safe-docker-credentials", "api_key")
 
 
 def load_s3_backup_credentials() -> S3BackupCredentials | None:
@@ -205,7 +183,7 @@ def load_s3_backup_credentials() -> S3BackupCredentials | None:
 
     Returns None if block not found or incomplete.
     """
-    block = _load_block("s3-backup-credentials")
+    block = _load_json_block("s3-backup-credentials")
     if not block:
         return None
 
